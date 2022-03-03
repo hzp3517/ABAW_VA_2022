@@ -17,7 +17,6 @@ import cv2
 from tools.vggface2 import Vggface2Extractor
 
 gpu_id = 2
-tmp_features_dir = '/data8/hzp/ABAW_VA_2022/processed_data/features'##
 features_dir = '/data9/hzp/ABAW_VA_2022/processed_data/features'
 set_list = ['train', 'val']
 
@@ -26,7 +25,7 @@ vggface2_extractor = Vggface2Extractor(gpu_id=gpu_id)
 for set_name in set_list:
     print('--------------process {}--------------'.format(set_name))
 
-    img_path = os.path.join(tmp_features_dir, '{}_original_img_data.h5'.format(set_name))
+    img_path = os.path.join(features_dir, '{}_original_img_data.h5'.format(set_name))
     img_h5f = h5py.File(img_path, 'r')
     vggface2_path = os.path.join(features_dir, '{}_vggface2_2048.h5'.format(set_name))
     vggface2_h5f = h5py.File(vggface2_path, 'w')

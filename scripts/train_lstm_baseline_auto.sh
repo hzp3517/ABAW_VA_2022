@@ -13,12 +13,12 @@ run_idx=${11}
 gpu_ids=${12}
 
 
-cmd="python train.py --dataset_mode=seq --model=lstm_baseline --gpu_ids=$gpu_ids
---log_dir=./logs/3-3 --checkpoints_dir=./checkpoints/3-3 --print_freq=2
+cmd="python train_csv.py --dataset_mode=seq_toy --model=lstm_baseline --gpu_ids=$gpu_ids
+--log_dir=./logs/debug --checkpoints_dir=./checkpoints/debug --print_freq=2
 --max_seq_len=$max_seq_len --regress_layers=$regress_layers --hidden_size=$hidden_size
 --feature_set=$feature --target=$target
 --batch_size=$batch_size --lr=$lr --dropout_rate=$dropout --run_idx=$run_idx --verbose
---niter=30 --niter_decay=40 --num_threads=0 --norm_features=$norm_features --norm_method=trn
+--niter=1 --niter_decay=1 --num_threads=0 --norm_features=$norm_features --norm_method=trn
 --name=$name --suffix={target}_{feature_set}_bs{batch_size}_lr{lr}_dp{dropout_rate}_hidden{hidden_size}_reg-{regress_layers}_seq{max_seq_len}_run{run_idx}"
 
 echo "-------------------------------------------------------------------------------------"

@@ -17,7 +17,7 @@ sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
 from data.base_dataset import BaseDataset#
 
 
-class SeqDataset(BaseDataset):
+class SeqToyDataset(BaseDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.add_argument('--norm_method', type=str, default='trn', choices=['batch', 'trn'], help='whether normalize method to use')
@@ -31,8 +31,7 @@ class SeqDataset(BaseDataset):
         set_name: [train, val, test]
         '''
         super().__init__(opt)
-        self.root = '/data9/hzp/ABAW_VA_2022/processed_data/'
-        # self.root = '/data9/hzp/ABAW_VA_2022/processed_data/toy'
+        self.root = '/data9/hzp/ABAW_VA_2022/processed_data/toy'
 
         self.feature_set = list(map(lambda x: x.strip(), opt.feature_set.split(',')))
         self.norm_method = opt.norm_method
@@ -174,14 +173,13 @@ class SeqDataset(BaseDataset):
 
 if __name__ == '__main__':
     class test:
-        feature_set = 'denseface'
+        feature_set = 'vggface2'
         dataroot = '/data9/hzp/ABAW_VA_2022/processed_data/'
-        max_seq_len = 100
-        norm_method = ''
-        norm_features = ''
+        norm_method = 'trn'
+        norm_features = 'vggface2'
     
     opt = test()
-    a = SeqDataset(opt, 'train')
+    a = SeqToyDataset(opt, 'train')
 
     iter_a = iter(a)
     data1 = next(iter_a)
