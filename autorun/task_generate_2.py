@@ -100,18 +100,18 @@ auto_csv_dir = 'autorun/csv_results/lstm'       # 生成结果csv文件路径，
 # 当需要在同一组设定下跑多次时候最好在这里开个子目录，而不是改下面的"name"
 
 task_script = 'scripts/train_lstm_baseline_auto.sh'     # 执行script路径
-avialable_gpus = [1, 2, 3, 4]                 # 可用GPU有哪些
-num_sessions = 4                        # 一共开多少个session同时执行（即开几个screen的会话）
+avialable_gpus = [3, 4]                 # 可用GPU有哪些
+num_sessions = 2                        # 一共开多少个session同时执行（即开几个screen的会话）
 avialable_gpus = avialable_gpus[:num_sessions]
-screen_name = 'hzp_abaw_train'
+screen_name = 'hzp_abaw_train_2nd'
 independent_parameters = {                              # 一共有哪些非关联参数
     # bash scripts/train_lstm_baseline.sh lstm valence denseface None 64 1e-4 0.3 128 256,256 100 1 3
 
     'name': ['lstm'], #注意：此列表中只能有一个元素，这个名字与log文件名最前面一部分也是关联的
     'target': ['valence', 'arousal'],
-    # 'feature': ['vggish,denseface'],
-    'feature': ['vggish', 'compare'],
-    'batch_size': [64],
+    'feature': ['vggish,denseface'],
+    # 'feature': ['denseface'],
+    'batch_size': [32],
     'lr': [1e-4],
     'dropout_rate': [0.3],
     'hidden_size': [128],
@@ -121,7 +121,7 @@ independent_parameters = {                              # 一共有哪些非关�
 }
 param_order_list = ['name', 'target', 'feature', 'norm_features', 'batch_size', 'lr', 'dropout_rate', 'hidden_size', 'regress_layers', 'max_seq_len', 'run_idx'] #除gpu外所有参数的顺序
 # norm_features = ['vggface2'] #需要做trn norm的单个特征名称
-norm_features = ['compare'] # 需要做trn norm的单个特征名称
+norm_features = [''] # 需要做trn norm的单个特征名称
 
 mkdir(auto_script_dir)
 

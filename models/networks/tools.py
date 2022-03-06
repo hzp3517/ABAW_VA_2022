@@ -4,6 +4,7 @@ from torch.nn import init
 import numpy as np
 import functools
 from torch.optim import lr_scheduler
+from transformers.optimization import get_linear_schedule_with_warmup
 
 class Identity(nn.Module):
     def forward(self, x):
@@ -55,6 +56,11 @@ def get_scheduler(optimizer, opt):
         scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, threshold=0.01, patience=5)
     elif opt.lr_policy == 'cosine':
         scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.niter, eta_min=0)
+    elif opt.lr_policy == 'linear_with_warmup':
+        # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=opt.niter_warmup, num_training_steps=opt.niter_total)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=opt.niter, num_training_steps=(opt.niter+opt.niter_decay))
+        
+        
     else:
         return NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
     return scheduler

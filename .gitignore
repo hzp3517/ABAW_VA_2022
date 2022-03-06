@@ -16,3 +16,5 @@ backup*
 /autorun/results
 hzp_test*
 toy/
+*_backup*
+smile.log

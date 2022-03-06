@@ -35,4 +35,4 @@ if __name__ == '__main__':
     a = FcEncoder(256, [128])
     print(a)
     print(a.module[0])
-    print(getattr(a, 'module'))
+    # print(getattr(a, 'module'))

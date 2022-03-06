@@ -45,13 +45,14 @@ def get_dim(feat_name):
         # 'ECG': 1,
         # 'resp': 1,
         # 'wav2vec_german': 1024
-        # 'vggish': 128,
         # 'inception': 2048,
         # 'facenet': 1024,
         # 'efficientnet': 1280,
         # 'trill_distilled': 2048,
         'denseface': 342,
-        'vggface2': 2048
+        'vggface2': 2048,
+        'vggish': 128,
+        'compare':130
     }
     if dim_dict.get(feat_name) is not None:
         return dim_dict[feat_name]

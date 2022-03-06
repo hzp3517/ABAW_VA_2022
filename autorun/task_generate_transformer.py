@@ -96,21 +96,21 @@ def make_task(independent_parameters, param_order_list, norm_features):
         
         
 auto_script_dir = 'autorun/auto'           # 生成脚本路径
-auto_csv_dir = 'autorun/csv_results/lstm'       # 生成结果csv文件路径，注意train_csv.py文件中也需要同步修改！！！
+auto_csv_dir = 'autorun/csv_results/transformer'       # 生成结果csv文件路径，注意train_csv.py文件中也需要同步修改！！！
 # 当需要在同一组设定下跑多次时候最好在这里开个子目录，而不是改下面的"name"
 
-task_script = 'scripts/train_lstm_baseline_auto.sh'     # 执行script路径
-avialable_gpus = [1, 2, 3, 4]                 # 可用GPU有哪些
-num_sessions = 4                        # 一共开多少个session同时执行（即开几个screen的会话）
+task_script = 'scripts/train_transformer_auto.sh'     # 执行script路径
+avialable_gpus = [2, 3]                 # 可用GPU有哪些
+num_sessions = 2                        # 一共开多少个session同时执行（即开几个screen的会话）
 avialable_gpus = avialable_gpus[:num_sessions]
-screen_name = 'hzp_abaw_train'
+screen_name = 'hzp_abaw_train_transformer'
 independent_parameters = {                              # 一共有哪些非关联参数
-    # bash scripts/train_lstm_baseline.sh lstm valence denseface None 64 1e-4 0.3 128 256,256 100 1 3
+    # bash scripts/train_transformer.sh baseline arousal denseface None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 7
 
-    'name': ['lstm'], #注意：此列表中只能有一个元素，这个名字与log文件名最前面一部分也是关联的
+    'name': ['baseline'], #注意：此列表中只能有一个元素，这个名字与log文件名最前面一部分也是关联的
     'target': ['valence', 'arousal'],
     # 'feature': ['vggish,denseface'],
-    'feature': ['vggish', 'compare'],
+    'feature': ['vggface2', 'compare'],
     'batch_size': [64],
     'lr': [1e-4],
     'dropout_rate': [0.3],

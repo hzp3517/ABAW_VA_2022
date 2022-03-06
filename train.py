@@ -25,11 +25,7 @@ def eval(model, val_iter):
     
     for i, data in enumerate(val_iter):  # inner loop within one epoch
         model.set_input(data)         # unpack data from dataset and apply preprocessing
-
-        with torch.no_grad:
-            model.test()
-
-        # model.test()
+        model.test()
         lengths = data['length'].numpy()
         pred = remove_padding(model.output.detach().cpu().numpy(), lengths)
         label = remove_padding(data[opt.target].numpy(), lengths)
@@ -167,7 +163,6 @@ if __name__ == '__main__':
     
     # write to result dir
     clean_chekpoints(opt.checkpoints_dir, opt.name, best_eval_epoch)
-    person_name = opt.checkpoints_dir.split('/')[2]
     autorun_result_dir = 'autorun/results'
     if not os.path.exists(autorun_result_dir):
         os.makedirs(autorun_result_dir)

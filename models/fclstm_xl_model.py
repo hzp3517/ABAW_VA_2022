@@ -5,14 +5,16 @@ import torch.nn.functional as F
 # from .base_model import BaseModel
 # from .networks.regressor import FcRegressor
 # from .networks.lstm_encoder import LSTMEncoder, BiLSTMEncoder
+# from .networks.fc_encoder import FcEncoder
 
 import sys
 sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
 from models.base_model import BaseModel#
 from models.networks.regressor import FcRegressor#
 from models.networks.lstm_encoder import LSTMEncoder, BiLSTMEncoder#
+from models.networks.fc_encoder import FcEncoder#
 
-class LstmBaselineModel(BaseModel):
+class FcLstmXLModel(BaseModel):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.add_argument('--max_seq_len', type=int, default=100, help='max sequence length of lstm')
@@ -22,6 +24,7 @@ class LstmBaselineModel(BaseModel):
         parser.add_argument('--target', default='arousal', type=str, help='one of [arousal, valence]')
         parser.add_argument('--bidirection', default=False, action='store_true', help='whether to use bidirectional lstm')
         parser.add_argument('--loss_type', type=str, default='mse', choices=['mse', 'l1', 'ccc'], help='use MSEloss or L1loss or CCCloss')
+        # parser.add_argument('--normalize', action='store_true', default=False, help='whether to normalize step features')
         return parser
 
     def __init__(self, opt, logger=None):
@@ -32,17 +35,19 @@ class LstmBaselineModel(BaseModel):
         """
         super().__init__(opt, logger)
         self.loss_names = ['MSE']
-        self.model_names = ['_seq', '_reg']
+        self.model_names = ['_fc', '_seq', '_reg']
         self.pretrained_model = []
         self.max_seq_len = opt.max_seq_len
         # net seq
         if opt.hidden_size == -1:
             opt.hidden_size = min(opt.input_dim // 2, 512)
+        # net fc fusion
+        self.net_fc = FcEncoder(opt.input_dim, [opt.hidden_size], dropout=0.1, dropout_input=False)
         if opt.bidirection:
-            self.net_seq = BiLSTMEncoder(opt.input_dim, opt.hidden_size)
+            self.net_seq = BiLSTMEncoder(opt.hidden_size, opt.hidden_size)
             self.hidden_mul = 2
         else:
-            self.net_seq = LSTMEncoder(opt.input_dim, opt.hidden_size)
+            self.net_seq = LSTMEncoder(opt.hidden_size, opt.hidden_size)
             self.hidden_mul = 1
 
         # net regression
@@ -102,7 +107,8 @@ class LstmBaselineModel(BaseModel):
         self.output = torch.cat(self.output, dim=1)
     
     def forward_step(self, input, states):
-        hidden, (h, c) = self.net_seq(input, states)
+        fusion = self.net_fc(input)
+        hidden, (h, c) = self.net_seq(fusion, states)
         prediction, _ = self.net_reg(hidden)
         return prediction, (h, c)
    
@@ -117,57 +123,57 @@ class LstmBaselineModel(BaseModel):
             torch.nn.utils.clip_grad_norm_(getattr(self, 'net'+model).parameters(), 5)
 
 
-# if __name__ == '__main__':
-#     import sys
-#     sys.path.append('/data8/hzp/ABAW_VA_2022/code/utils')#
-#     from tools import calc_total_dim
-#     from data import create_dataset, create_dataset_with_args
+if __name__ == '__main__':
+    import sys
+    sys.path.append('/data8/hzp/ABAW_VA_2022/code/utils')#
+    from tools import calc_total_dim
+    from data import create_dataset, create_dataset_with_args
 
-#     class test:
-#         feature_set = 'denseface'
-#         max_seq_len = 100
-#         hidden_size = 256
-#         bidirection = False
-#         input_dim = calc_total_dim(list(map(lambda x: x.strip(), feature_set.split(',')))) #计算出拼接后向量的维度
-#         regress_layers = '256,128'
-#         lr = 1e-4
-#         #weight_decay = 1e-4
-#         beta1 = 0.5
+    class test:
+        feature_set = 'denseface'
+        max_seq_len = 100
+        hidden_size = 256
+        bidirection = False
+        input_dim = calc_total_dim(list(map(lambda x: x.strip(), feature_set.split(',')))) #计算出拼接后向量的维度
+        regress_layers = '256,128'
+        lr = 1e-4
+        #weight_decay = 1e-4
+        beta1 = 0.5
 
-#         batch_size = 8
-#         epoch_count = 1
-#         niter=20
-#         niter_decay=30
-#         gpu_ids = 0
-#         isTrain = True
-#         checkpoints_dir = ''
-#         name = ''
-#         cuda_benchmark = ''
-#         dropout_rate = 0.3
-#         target = 'arousal'
-#         loss_type = ''
-#         dataset_mode = 'seq'
-#         serial_batches = True
-#         num_threads = 0
-#         max_dataset_size = float("inf")
-#         norm_method = ''
-#         norm_features = ''
+        batch_size = 8
+        epoch_count = 1
+        niter=20
+        niter_decay=30
+        gpu_ids = 0
+        isTrain = True
+        checkpoints_dir = ''
+        name = ''
+        cuda_benchmark = ''
+        dropout_rate = 0.3
+        target = 'arousal'
+        loss_type = ''
+        dataset_mode = 'seq_toy'
+        serial_batches = True
+        num_threads = 0
+        max_dataset_size = float("inf")
+        norm_method = ''
+        norm_features = ''
 
     
-#     opt = test()
-#     net_a = LstmBaselineModel(opt)
+    opt = test()
+    net_a = FcLstmXLModel(opt)
 
 
-#     dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
+    dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
 
-#     total_iters = 0                             # the total number of training iterations
-#     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
-#         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
-#         for i, data in enumerate(dataset):  # inner loop within one epoch
-#             total_iters += 1                # opt.batch_size
-#             epoch_iter += opt.batch_size
-#             net_a.set_input(data)           # unpack data from dataset and apply preprocessing
-#             net_a.run()
+    total_iters = 0                             # the total number of training iterations
+    for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+        epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
+        for i, data in enumerate(dataset):  # inner loop within one epoch
+            total_iters += 1                # opt.batch_size
+            epoch_iter += opt.batch_size
+            net_a.set_input(data)           # unpack data from dataset and apply preprocessing
+            net_a.run()
 
-#             print(net_a.output)
-#             print(net_a.output.shape)
+            print(net_a.output)
+            print(net_a.output.shape)

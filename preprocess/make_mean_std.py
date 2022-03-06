@@ -33,7 +33,7 @@ def cal_mean_std_on_trn(features_dir, feature):
 
 if __name__ == '__main__':
     features_dir = '/data9/hzp/ABAW_VA_2022/processed_data/features/'
-    features = ['vggface2']
+    features = ['compare', 'egemaps']
     for ft in features:
         print('process feature:', ft)
         mean_f, std_f = cal_mean_std_on_trn(features_dir, ft) #返回值为np.array类型

@@ -111,8 +111,12 @@ class CustomDatasetDataLoader():
             )
 
         else:
+            if 'inference_batched' in kwargs.keys() and kwargs['inference_batched']:
+                batch_size = opt.batch_size
+            else:
+                batch_size = opt.batch_size if kwargs['set_name'] == 'train' else 1
             # batch_size = opt.batch_size if kwargs['set_name'] == 'train' else 1
-            batch_size = opt.batch_size
+            # batch_size = opt.batch_size
             self.dataloader = torch.utils.data.DataLoader(
                 self.dataset,
                 batch_size=batch_size,
