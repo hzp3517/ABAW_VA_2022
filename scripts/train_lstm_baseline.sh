@@ -13,7 +13,7 @@ run_idx=${11}
 gpu_ids=${12}
 
 
-cmd="python train.py --dataset_mode=seq --model=fcfusion --gpu_ids=$gpu_ids
+cmd="python train.py --dataset_mode=seq --model=lstm_baseline --gpu_ids=$gpu_ids
 --log_dir=./logs/3-5 --checkpoints_dir=./checkpoints/3-5 --print_freq=2
 --max_seq_len=$max_seq_len --regress_layers=$regress_layers --hidden_size=$hidden_size
 --feature_set=$feature --target=$target

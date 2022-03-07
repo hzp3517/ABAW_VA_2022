@@ -52,3 +52,14 @@ echo $cmd | sh
 
 # bash scripts/train_transformer.sh baseline arousal denseface,compare compare 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 6
 # bash scripts/train_transformer.sh baseline valence denseface,compare compare 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 7
+
+
+
+
+
+# bash scripts/train_transformer.sh baseline valence denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 4
+# bash scripts/train_transformer.sh baseline valence denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 2 7
+
+
+# bash scripts/train_transformer.sh baseline arousal denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 4
+# bash scripts/train_transformer.sh baseline arousal denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 2 7

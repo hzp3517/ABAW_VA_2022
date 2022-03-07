@@ -13,8 +13,8 @@ run_idx=${11}
 gpu_ids=${12}
 
 
-cmd="python train_csv.py --dataset_mode=seq --model=lstm_baseline --gpu_ids=$gpu_ids
---log_dir=./logs/3-5 --checkpoints_dir=./checkpoints/3-5 --print_freq=2
+cmd="python train_csv_2.py --dataset_mode=seq --model=lstm_baseline --gpu_ids=$gpu_ids
+--log_dir=./logs/audio --checkpoints_dir=./checkpoints/audio --print_freq=2
 --max_seq_len=$max_seq_len --regress_layers=$regress_layers --hidden_size=$hidden_size
 --feature_set=$feature --target=$target
 --batch_size=$batch_size --lr=$lr --dropout_rate=$dropout --run_idx=$run_idx --verbose
@@ -24,18 +24,12 @@ cmd="python train_csv.py --dataset_mode=seq --model=lstm_baseline --gpu_ids=$gpu
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
 
-# bash scripts/train_lstm_baseline_auto.sh lstm valence vggface2 vggface2 64 1e-4 0.3 128 256,256 100 1 1
-# bash scripts/train_lstm_baseline_auto.sh lstm arousal vggface2 vggface2 64 1e-4 0.3 128 256,256 100 1 2
-
-# bash scripts/train_lstm_baseline_auto.sh lstm valence vggface2 None 32 1e-4 0.3 128 256,256 100 1 3
-# bash scripts/train_lstm_baseline_auto.sh lstm arousal vggface2 None 64 1e-4 0.3 128 256,256 100 1 4
-
-# bash scripts/train_lstm_baseline_auto.sh lstm arousal vggish,denseface vggish 32 1e-4 0.3 128 128,128 100 1 3
-
-# bash scripts/train_lstm_baseline_auto.sh lstm arousal vggish,denseface vggish 32 1e-4 0.3 128 256,256 100 1 3
 
 
+# bash scripts/train_lstm_baseline_auto.sh lstm arousal vggish vggish 32 1e-4 0.3 128 256,256 100 1 6
 
-# bash scripts/train_lstm_baseline_auto.sh lstm arousal vggish vggish 64 1e-4 0.3 128 256,256 100 1 6
 
-# bash scripts/train_lstm_baseline_auto.sh lstm arousal vggish vggish 64 1e-4 0.3 128 256,256 100 1 6
+# bash scripts/train_lstm_baseline_auto.sh lstm arousal wav2vec None 32 1e-4 0.3 128 256,256 100 2 1
+
+# bash scripts/train_lstm_baseline_auto.sh lstm valence wav2vec None 32 1e-4 0.3 128 256,256 100 1 2
+# bash scripts/train_lstm_baseline_auto.sh lstm valence wav2vec None 32 1e-4 0.3 128 256,256 100 2 6

@@ -30,7 +30,6 @@ def get_dim(feat_name):
         # 'effnet_finetune_aug': 256,
         # 'vgg16': 512,
         # 'lld': 130,
-        # 'wav2vec': 768,
         # 'compare_mean': 130,
         # 'compare_downsample': 130,
         # 'word2vec': 300,
@@ -52,7 +51,9 @@ def get_dim(feat_name):
         'denseface': 342,
         'vggface2': 2048,
         'vggish': 128,
-        'compare':130
+        'compare':130,
+        'wav2vec': 768,
+        'egemaps': 23
     }
     if dim_dict.get(feat_name) is not None:
         return dim_dict[feat_name]

@@ -96,35 +96,30 @@ def make_task(independent_parameters, param_order_list, norm_features):
         
         
 auto_script_dir = 'autorun/auto'           # 生成脚本路径
-auto_csv_dir = 'autorun/csv_results/transformer'       # 生成结果csv文件路径，注意train_csv.py文件中也需要同步修改！！！
+auto_csv_dir = 'autorun/csv_results/audio'       # 生成结果csv文件路径，注意train_csv.py文件中也需要同步修改！！！
 # 当需要在同一组设定下跑多次时候最好在这里开个子目录，而不是改下面的"name"
 
-task_script = 'scripts/train_transformer_auto.sh'     # 执行script路径
-avialable_gpus = [2, 3]                 # 可用GPU有哪些
+task_script = 'scripts/train_lstm_baseline_auto.sh'     # 执行script路径
+avialable_gpus = [4, 5]                 # 可用GPU有哪些
 num_sessions = 2                        # 一共开多少个session同时执行（即开几个screen的会话）
 avialable_gpus = avialable_gpus[:num_sessions]
-screen_name = 'hzp_abaw_train_transformer'
+screen_name = 'hzp_abaw_train_audio'
 independent_parameters = {                              # 一共有哪些非关联参数
-    # bash scripts/train_transformer.sh baseline arousal denseface None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 7
+    # bash scripts/train_lstm_baseline_auto.sh lstm arousal wav2vec None 32 1e-4 0.3 128 256,256 100 1 5
 
-    'name': ['baseline'], #注意：此列表中只能有一个元素，这个名字与log文件名最前面一部分也是关联的
+    'name': ['lstm'], #注意：此列表中只能有一个元素，这个名字与log文件名最前面一部分也是关联的
     'target': ['valence', 'arousal'],
-    # 'feature': ['vggish,denseface'],
-    'feature': ['vggface2', 'vggface2,compare'],
-    'batch_size': [8],
-    'lr': [5e-5],
+    'feature': ['vggish', 'compare', 'wav2vec', 'vggish,egemaps', 'compare,egemaps', 'vggish,compare'],
+    'batch_size': [32],
+    'lr': [1e-4],
     'dropout_rate': [0.3],
+    'hidden_size': [128],
     'regress_layers': ['256,256'],
     'max_seq_len': [100],
-    'hidden_size': [256],
-    'num_layers': [4],
-    'ffn_dim': [1024],
-    'nhead': [4],
-    'loss_type': ['mse'],
     'run_idx': [1, 2]
 }
-param_order_list = ['name', 'target', 'feature', 'norm_features', 'batch_size', 'lr', 'dropout_rate', 'regress_layers', 'max_seq_len', 'hidden_size', 'num_layers', 'ffn_dim', 'nhead', 'loss_type', 'run_idx'] #除gpu外所有参数的顺序
-norm_features = ['vggface2', 'compare'] # 需要做trn norm的单个特征名称
+param_order_list = ['name', 'target', 'feature', 'norm_features', 'batch_size', 'lr', 'dropout_rate', 'hidden_size', 'regress_layers', 'max_seq_len', 'run_idx'] #除gpu外所有参数的顺序
+norm_features = ['compare', 'egemaps'] # 需要做trn norm的单个特征名称
 
 mkdir(auto_script_dir)
 

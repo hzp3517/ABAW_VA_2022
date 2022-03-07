@@ -122,17 +122,20 @@ class TCNModel(nn.Module):
         self.network = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.network(x)
+        x = torch.transpose(x, 1, 2)
+        x = self.network(x)
+        x = torch.transpose(x, 1, 2)
+        return x
 
 
 
 if __name__ == '__main__':
     # model = TCNModel(2048, (512,))
     model = TCNModel(2048, [512,])
-    # input = torch.rand((8, 60, 2048)) #(bs, seq_len, embd_dim)
-    input = torch.rand((8, 2048, 60)) #(bs, embd_dim, seq_len)
+    input = torch.rand((8, 60, 2048)) #(bs, seq_len, embd_dim)
+    # input = torch.rand((8, 2048, 60)) #(bs, embd_dim, seq_len)
     # print(input)
     output = model(input)
     print(model)
     # print(output)
-    print(output.shape) # (8, 512, 60)
+    print(output.shape) # (8, 60, 512)
