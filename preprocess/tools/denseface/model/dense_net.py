@@ -58,7 +58,9 @@ class _Transition(nn.Sequential):
 
 class DenseNet(nn.Module):
     "DenseNet-BC model"
-    def __init__(self, gpu_id, growth_rate=32, block_config=(6, 12, 24, 16), num_init_features=64,
+    # def __init__(self, gpu_id, growth_rate=32, block_config=(6, 12, 24, 16), num_init_features=64,
+    #              bn_size=4, compression_rate=0.5, drop_rate=0, num_classes=8, **kwargs):
+    def __init__(self, gpu_id, growth_rate=12, block_config=(16, 16, 16), num_init_features=24,
                  bn_size=4, compression_rate=0.5, drop_rate=0, num_classes=8, **kwargs):
         """
         default is the densenet121 setting
@@ -111,22 +113,22 @@ class DenseNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.bias, 0)
 
-    def set_input(self, batch):
-        """
-        Unpack input data from the dataloader and perform necessary pre-processing steps.
-        Parameters:
-            input (dict): include the data itself and its metadata information.
-        """
-        # (batch, heigh, width, channel)
-        bs_images = batch['images'].float().to(self.device)
-        # (batch, channel, heigh, width)
-        self.bs_images = bs_images.permute(0, 3, 1, 2)
-        if batch.get('labels') is not None:
-            self.bs_labels = batch['labels'].to(self.device)
+    # def set_input(self, batch):
+    #     """
+    #     Unpack input data from the dataloader and perform necessary pre-processing steps.
+    #     Parameters:
+    #         input (dict): include the data itself and its metadata information.
+    #     """
+    #     # (batch, heigh, width, channel)
+    #     bs_images = batch['images'].float().to(self.device)
+    #     # (batch, channel, heigh, width)
+    #     self.bs_images = bs_images.permute(0, 3, 1, 2)
+    #     if batch.get('labels') is not None:
+    #         self.bs_labels = batch['labels'].to(self.device)
 
-    def forward(self):
+    def forward(self, input):
         #input-shape: (N, Cin, H, W) 
-        features = self.features(self.bs_images) # torch.Size([64, 342, 8, 8])
+        features = self.features(input).to(self.device) # torch.Size([64, 342, 8, 8])
         # print('dense output {}'.format(features.size())) 
         self.out_ft = F.avg_pool2d(features, kernel_size=8, stride=1).view(features.size(0), -1)  # torch.Size([64, 342])
         # print('out_ft {}'.format(out_ft.size()))
@@ -135,6 +137,8 @@ class DenseNet(nn.Module):
         self.pred = F.softmax(logits, dim=-1)
         if getattr(self, 'bs_label', None):
             self.loss = self.criterion(logits, self.bs_labels)
+            
+        return self.out_ft, logits
         
     def backward(self, max_grad=0.0):
         """Calculate the loss for back propagation"""
@@ -145,7 +149,9 @@ class DenseNet(nn.Module):
 
 class DenseNetEncoder(nn.Module):
     "DenseNet-BC model"
-    def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16), num_init_features=64,
+    # def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16), num_init_features=64,
+    #              bn_size=4, compression_rate=0.5, drop_rate=0, frozen_dense_blocks=0, **kwargs):
+    def __init__(self, gpu_id, growth_rate=12, block_config=(16, 16, 16), num_init_features=24,
                  bn_size=4, compression_rate=0.5, drop_rate=0, frozen_dense_blocks=0, **kwargs):
         """
         in this model, we use the model densenet100 in code/denseface/config/conf_fer.py
@@ -159,6 +165,8 @@ class DenseNetEncoder(nn.Module):
         :param num_classes: (int) number of classes for classification
         """
         super(DenseNetEncoder, self).__init__()
+        self.device = torch.device("cuda:{}".format(gpu_id))
+
         # first Conv2d # kernel_size=3, strides=[1, 2, 2, 1]
         self.features = nn.Sequential(OrderedDict([
             ("conv0", nn.Conv2d(1, num_init_features, kernel_size=3, stride=2, padding=1, bias=False))
@@ -205,9 +213,31 @@ class DenseNetEncoder(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, images):
-        # (T, H, W)
-        images = images.unsqueeze(1) # (T, 1, H, W)
         features = self.features(images) # torch.Size([64, 342, 8, 8])
         # print('dense output {}'.format(features.size())) 
         out_ft = F.avg_pool2d(features, kernel_size=8, stride=1).view(features.size(0), -1)  # torch.Size([64, 342])
         return out_ft
+    
+    
+if __name__ == '__main__':
+    # gpu_id = 3
+    # device = torch.device("cuda:{}".format(gpu_id))
+    # model = DenseNet(gpu_id=gpu_id).to(device)
+    # input = torch.rand((8, 1, 64, 64)).to(device) # (batch, channel, heigh, width)
+    # ft, logits = model(input)
+    # print(model)
+    # # print(ft)
+    # print(ft.shape)
+    
+    
+    gpu_id = 1
+    device = torch.device("cuda:{}".format(gpu_id))
+    model = DenseNetEncoder(gpu_id=gpu_id).to(device)
+    input = torch.rand((8, 1, 64, 64)).to(device) # (batch, channel, heigh, width)
+    ft = model(input)
+    print(model)
+    # print(ft)
+    print(ft.shape)
+    
+    
+    

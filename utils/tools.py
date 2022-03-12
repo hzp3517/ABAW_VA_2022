@@ -53,7 +53,8 @@ def get_dim(feat_name):
         'vggish': 128,
         'compare':130,
         'wav2vec': 768,
-        'egemaps': 23
+        'egemaps': 23,
+        'affectnet': 342
     }
     if dim_dict.get(feat_name) is not None:
         return dim_dict[feat_name]

@@ -221,5 +221,5 @@ if __name__ == '__main__':
     f.close()
 
     #write to csv result
-    csv_result_dir = os.path.join('autorun', 'csv_results', 'audio')
+    csv_result_dir = os.path.join('autorun', 'csv_results', 'transformer')
     auto_write_csv(csv_result_dir, opt, best_eval_ccc)

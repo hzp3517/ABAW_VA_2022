@@ -14,7 +14,7 @@ run_idx=${12}
 gpu_ids=${13}
 
 
-cmd="python train.py --dataset_mode=seq --model=lstm_baseline --gpu_ids=$gpu_ids
+cmd="python train_csv.py --dataset_mode=seq --model=fclstm_xl --gpu_ids=$gpu_ids
 --log_dir=./logs/lstm --checkpoints_dir=./checkpoints/lstm --print_freq=2
 --max_seq_len=$max_seq_len --regress_layers=$regress_layers --hidden_size=$hidden_size
 --feature_set=$feature --target=$target --loss_type=$loss_type
@@ -27,5 +27,5 @@ echo $cmd | sh
 
 
 
-# bash scripts/train_lstm.sh lstm valence denseface None 32 1e-4 0.3 128 256,256 100 mse 1 6
-# bash scripts/train_lstm.sh lstm arousal denseface None 32 1e-4 0.3 128 256,256 100 mse 1 7
+# bash scripts/train_lstm.sh fclstm-xl valence denseface_mse1239 None 32 1e-4 0.3 128 256,256 100 mse 1 3
+# bash scripts/train_lstm.sh fclstm-xl arousal denseface_mse1239 None 32 1e-4 0.3 128 256,256 100 mse 1 4

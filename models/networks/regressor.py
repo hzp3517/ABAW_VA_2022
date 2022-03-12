@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 
 class FcRegressor(nn.Module):
-    def __init__(self, input_dim, layers, output_dim, activation=nn.ReLU(), dropout=0.3, use_bn=False, dropout_input=True):
+    def __init__(self, input_dim, layers, output_dim, activation=nn.ReLU(), dropout=0.3, use_bn=False, dropout_input=False):
         ''' Fully Connect classifier
             Parameters:
             --------------------------

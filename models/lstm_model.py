@@ -163,10 +163,23 @@ if __name__ == '__main__':
 
     dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
 
+    # total_iters = 0                             # the total number of training iterations
+    # for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+    #     epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
+    #     for i, data in enumerate(dataset):  # inner loop within one epoch
+    #         total_iters += 1                # opt.batch_size
+    #         epoch_iter += opt.batch_size
+    #         net_a.set_input(data)           # unpack data from dataset and apply preprocessing
+    #         net_a.run()
+
+    #         print(net_a.output)
+    #         print(net_a.output.shape)
+            
+            
     total_iters = 0                             # the total number of training iterations
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
-        for i, data in enumerate(dataset):  # inner loop within one epoch
+        for i, data in enumerate(val_dataset):  # inner loop within one epoch
             total_iters += 1                # opt.batch_size
             epoch_iter += opt.batch_size
             net_a.set_input(data)           # unpack data from dataset and apply preprocessing

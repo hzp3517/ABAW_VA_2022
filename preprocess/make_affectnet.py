@@ -2,7 +2,7 @@
 {
     [new_video_id]: 
     {
-        'fts': [ft, ft, ...], # (video_len, dim=2048)
+        'fts': [ft, ft, ...], # (video_len, dim=342)
         'pad': [0, 0, 1, ...] # 0表示原始图像有效，1表示该帧为从旁边帧填充
     }
 }
@@ -14,26 +14,26 @@ import glob
 from tqdm import tqdm
 import cv2
 
-from tools.vggface2 import Vggface2Extractor
+from tools.affectnet import AffectnetExtractor
 
-gpu_id = 2
+gpu_id = 1
 features_dir = '/data9/hzp/ABAW_VA_2022/processed_data/features'
 set_list = ['train', 'val']
 
-vggface2_extractor = Vggface2Extractor(gpu_id=gpu_id)
+affectnet_extractor = AffectnetExtractor(gpu_id=gpu_id)
 
 for set_name in set_list:
     print('--------------process {}--------------'.format(set_name))
 
-    img_path = os.path.join(features_dir, '{}_original_img_data.h5'.format(set_name))
+    img_path = os.path.join(features_dir, '{}_gray_img_data.h5'.format(set_name))
     img_h5f = h5py.File(img_path, 'r')
-    vggface2_path = os.path.join(features_dir, '{}_vggface2_2048.h5'.format(set_name))
-    vggface2_h5f = h5py.File(vggface2_path, 'w')
+    affectnet_path = os.path.join(features_dir, '{}_affectnet.h5'.format(set_name))
+    affectnet_h5f = h5py.File(affectnet_path, 'w')
 
     for video in tqdm(list(img_h5f.keys())):
-        video_group = vggface2_h5f.create_group(video)
+        video_group = affectnet_h5f.create_group(video)
         img_list = img_h5f[video]['images'][()]
         pad_list = img_h5f[video]['pad'][()]
-        fts = vggface2_extractor(img_list)
+        fts = affectnet_extractor(img_list, chunk_size=256)
         video_group['fts'] = fts
         video_group['pad'] = pad_list

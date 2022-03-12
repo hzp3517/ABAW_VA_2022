@@ -33,3 +33,6 @@ echo $cmd | sh
 
 # bash scripts/train_tcn.sh tcn valence denseface None 32 1e-4 0.3 256,256 0.2 256 3 100 mse 2 4
 # bash scripts/train_tcn.sh tcn arousal denseface None 32 1e-4 0.3 256,256 0.2 256 3 100 mse 2 5
+
+# bash scripts/train_tcn.sh tcn valence denseface None 32 1e-4 0.3 256,256 0.2 256,256,256 3 100 mse 1 4
+# bash scripts/train_tcn.sh tcn arousal denseface None 32 1e-4 0.3 256,256 0.2 256,256,256 3 100 mse 1 5

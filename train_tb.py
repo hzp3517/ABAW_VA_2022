@@ -13,6 +13,7 @@ import torch
 from collections import OrderedDict
 import fcntl
 import csv
+
 from torch.utils.tensorboard import SummaryWriter
 
 def test(model, tst_iter):
@@ -50,56 +51,6 @@ def clean_chekpoints(checkpoints_dir, expr_name, store_epoch):
     for checkpoint in os.listdir(root):
         if not checkpoint.startswith(str(store_epoch)+'_') and checkpoint.endswith('pth'):
             os.remove(os.path.join(root, checkpoint))
-
-
-def auto_write_csv(csv_result_dir, opt, best_eval_ccc):
-    name = opt.name
-    if opt.suffix:
-        suffix = ('_' + opt.suffix.format(**vars(opt))) if opt.suffix != '' else ''
-        suffix = suffix.replace(',', '-')
-    name = name.replace(suffix, '')
-
-    csv_path = os.path.join(csv_result_dir, name + '.csv')
-
-    feature = opt.feature_set
-    target = opt.target
-    lr = opt.lr
-    run_idx = opt.run_idx
-
-    lines = []
-    row_pos = None
-
-    f = open(csv_path, "r+")
-    fcntl.flock(f.fileno(), fcntl.LOCK_EX) #加锁
-    reader = csv.reader(f)
-    feature = feature.replace(',', '+')
-
-    line = next(reader) #表头
-    column_pos = None
-    c_id = 0
-    for c in line:
-        if str(lr) + '_run' + str(run_idx) == c:
-            column_pos = c_id
-            break
-        c_id += 1
-    lines.append(line)
-
-    row_id = 1
-    for line in reader:
-        lines.append(line)
-        if feature == line[0] and target == line[1]:
-            row_pos = row_id
-        row_id += 1
-        
-    f.seek(0) #写之前先要把文件指针归零
-    writer = csv.writer(f)
-    if row_pos and column_pos:
-        lines[row_pos][column_pos] = round(best_eval_ccc, 6)
-    writer.writerows(lines)
-    fcntl.flock(f.fileno(), fcntl.LOCK_UN) #解锁
-    f.close()
-
-
 
 if __name__ == '__main__':
     smooth = False
@@ -222,7 +173,3 @@ if __name__ == '__main__':
     f = open(os.path.join(autorun_result_dir, opt.name + '.txt'), 'w')
     f.write('Best eval epoch %d found with ccc %.4f' % (best_eval_epoch, best_eval_ccc))
     f.close()
-
-    #write to csv result
-    csv_result_dir = os.path.join('autorun', 'csv_results', 'lstm')
-    auto_write_csv(csv_result_dir, opt, best_eval_ccc)

@@ -17,7 +17,7 @@ run_idx=${15}
 gpu_ids=${16}
 
 
-cmd="python train_csv.py --dataset_mode=seq --model=transformer --gpu_ids=$gpu_ids
+cmd="python train_csv_2.py --dataset_mode=seq --model=transformer --gpu_ids=$gpu_ids
 --log_dir=./logs/transformer --checkpoints_dir=./checkpoints/transformer --print_freq=2
 --hidden_size=$hidden_size --regress_layers=$regress_layers --max_seq_len=$max_seq_len
 --num_layers=$num_layers --ffn_dim=$ffn_dim --nhead=$nhead

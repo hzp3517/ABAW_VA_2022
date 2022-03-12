@@ -29,7 +29,7 @@ def get_wav2vec_ft(audio_root, video_id, num_frames, gpu_id, frame_rate=0.02):
     start_time_list = [i * (1.0/30) for i in range(num_frames)]
     end_time_list = [((1.0/30) + i * (1.0/30)) for i in range(num_frames)]
     
-    # 把每个时刻的值精度缩小一下，因为float本身有些小数最后一位不够精确导致多算一条frame
+    # 把每个时刻的值精度缩小一下，防止因为float本身有些小数最后一位不够精确导致多算一条frame
     start_time_list = [round(i, 4) for i in start_time_list]
     end_time_list = [round(i, 4) for i in end_time_list]
     
