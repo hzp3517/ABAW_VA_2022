@@ -7,10 +7,12 @@ import torch.nn.functional as F
 # from .networks.transformer import TransformerEncoder#
 
 import sys
-sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
-from models.base_model import BaseModel#
-from models.networks.regressor import FcRegressor#
-from models.networks.transformer import TransformerEncoder#
+sys.path.append('/data8/hzp/ABAW_VA_2022/code')
+from models.base_model import BaseModel
+from models.networks.regressor import FcRegressor
+from models.networks.transformer import TransformerEncoder
+from models.networks.fft import FFTEncoder
+from models.networks.loss import CCCLoss
 
 class TransformerModel(BaseModel):
     @staticmethod
@@ -23,7 +25,9 @@ class TransformerModel(BaseModel):
         parser.add_argument('--nhead', default=4, type=int, help='number of heads of transformer encoder')
         parser.add_argument('--dropout_rate', default=0.3, type=float, help='drop out rate of FC layers')
         parser.add_argument('--target', default='arousal', type=str, help='one of [arousal, valence]')
-        parser.add_argument('--loss_type', type=str, default='mse', choices=['mse', 'l1', 'ccc'], help='use MSEloss or L1loss or CCCloss')
+        parser.add_argument('--loss_type', type=str, default='mse', choices=['mse', 'l1', 'ccc', 'batch_ccc'], help='use MSEloss or L1loss or CCCloss')
+        parser.add_argument('--pe_type', type=str, choices=['sincos', 'embedding', 'none'], help='whether to use position encoding')
+        parser.add_argument('--encoder_type', type=str, default='transformer', choices=['transformer', 'fft'], help='whether to use position encoding')
         return parser
 
     def __init__(self, opt, logger=None):
@@ -33,16 +37,25 @@ class TransformerModel(BaseModel):
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
         super().__init__(opt, logger)
-        self.loss_names = ['MSE']
+        self.loss_names = ['reg']
         self.model_names = ['_seq', '_reg']
         self.pretrained_model = []
         self.max_seq_len = opt.max_seq_len
+        self.pe_type = opt.pe_type
+        self.encoder_type = opt.encoder_type
+        self.loss_type = opt.loss_type
         
         # net seq (already include a linear projection before the transformer encoder)
         if opt.hidden_size == -1:
             opt.hidden_size = min(opt.input_dim // 2, 512)
-        self.net_seq = TransformerEncoder(opt.input_dim, opt.num_layers, opt.nhead, \
-                                          dim_feedforward=opt.ffn_dim, affine=True, affine_dim=opt.hidden_size)
+            
+        if self.encoder_type == 'transformer':
+            self.net_seq = TransformerEncoder(opt.input_dim, opt.num_layers, opt.nhead, \
+                                            dim_feedforward=opt.ffn_dim, affine=True, \
+                                            affine_dim=opt.hidden_size, pe_type=self.pe_type)
+        elif self.encoder_type == 'fft':
+            self.net_seq = FFTEncoder(opt.input_dim, opt.num_layers, opt.nhead,\
+                                dim_feedforward=opt.ffn_dim, affine=True, affine_dim=opt.hidden_size)
 
         # net regression
         layers = list(map(lambda x: int(x), opt.regress_layers.split(',')))
@@ -53,8 +66,12 @@ class TransformerModel(BaseModel):
         if self.isTrain:
             if opt.loss_type == 'mse':
                 self.criterion_reg = torch.nn.MSELoss(reduction='sum')
-            else:
+            elif opt.loss_type == 'l1':
                 self.criterion_reg = torch.nn.L1Loss(reduction='sum')
+            elif opt.loss_type == 'ccc':
+                self.criterion_reg = CCCLoss(reduction='mean', batch_compute=False)
+            elif opt.loss_type == 'batch_ccc':
+                self.criterion_reg = CCCLoss(reduction='mean', batch_compute=True)
             
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             paremeters = [{'params': getattr(self, 'net'+net).parameters()} for net in self.model_names]
@@ -86,7 +103,7 @@ class TransformerModel(BaseModel):
         for step in range(split_seg_num):
             feature_step = self.feature[:, step*self.max_seq_len: (step+1)*self.max_seq_len]
             mask = self.mask[:, step*self.max_seq_len: (step+1)*self.max_seq_len]
-            prediction = self.forward_step(feature_step)
+            prediction = self.forward_step(feature_step, mask)
             self.output.append(prediction.squeeze(dim=-1))
             # backward
             if self.isTrain:
@@ -96,8 +113,11 @@ class TransformerModel(BaseModel):
                 self.optimizer.step() 
         self.output = torch.cat(self.output, dim=1)
     
-    def forward_step(self, input):
-        out, hidden_states = self.net_seq(input) # hidden_states: layers * (seq_len, bs, ft_dim)
+    def forward_step(self, input, mask):
+        if self.encoder_type == 'fft':
+            out, hidden_states = self.net_seq(input, mask) # hidden_states: layers * (seq_len, bs, ft_dim)
+        else:
+            out, hidden_states = self.net_seq(input) # hidden_states: layers * (seq_len, bs, ft_dim)
         last_hidden = hidden_states[-1].transpose(0, 1) # (bs, seq_len, ft_dim)
         prediction, _ = self.net_reg(last_hidden)
         return prediction
@@ -107,8 +127,11 @@ class TransformerModel(BaseModel):
         pred = pred.squeeze() * mask
         target = target * mask
         batch_size = target.size(0)
-        self.loss_MSE = self.criterion_reg(pred, target) / batch_size
-        self.loss_MSE.backward(retain_graph=False)    
+        if 'ccc' in self.loss_type:
+            self.loss_reg = self.criterion_reg(pred, target, mask)
+        else:
+            self.loss_reg = self.criterion_reg(pred, target) / batch_size
+        self.loss_reg.backward(retain_graph=False)  
         for model in self.model_names:
             torch.nn.utils.clip_grad_norm_(getattr(self, 'net'+model).parameters(), 5)
 

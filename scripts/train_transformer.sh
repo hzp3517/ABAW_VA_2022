@@ -23,7 +23,7 @@ cmd="python train.py --dataset_mode=seq --model=transformer --gpu_ids=$gpu_ids
 --num_layers=$num_layers --ffn_dim=$ffn_dim --nhead=$nhead
 --feature_set=$feature --target=$target --loss_type=$loss_type
 --batch_size=$batch_size --lr=$lr --dropout_rate=$dropout --run_idx=$run_idx --verbose
---niter=30 --niter_decay=40
+--niter=10 --niter_decay=20
 --num_threads=0 --norm_features=$norm_features --norm_method=trn
 --name=$name 
 --suffix={target}_{feature_set}_bs{batch_size}_lr{lr}_dp{dropout_rate}_reg-{regress_layers}_hidden{hidden_size}_layers{num_layers}_ffn{ffn_dim}_nhead{nhead}_{loss_type}_run{run_idx}"
@@ -33,33 +33,4 @@ echo $cmd | sh
 
 # --lr_policy=linear_with_warmup
 
-# 5e-5
-
-
-
-# bash scripts/train_transformer.sh baseline arousal denseface None 32 1e-4 0.3 256,256 100 256 4 1024 4 mse 4 1 2
-# bash scripts/train_transformer.sh baseline arousal denseface None 32 1e-4 0.3 256,256 100 256 4 1024 4 mse 8 1 3
-# bash scripts/train_transformer.sh baseline arousal denseface None 32 1e-4 0.3 256,256 100 256 4 1024 4 mse 14 1 4
-
-# bash scripts/train_transformer.sh baseline arousal denseface None 32 2e-4 0.3 256,256 100 256 4 1024 4 mse 4 1 6
-# bash scripts/train_transformer.sh baseline arousal denseface None 32 1e-4 0.3 256,256 100 512 4 2048 8 mse 4 1 7
-
-
-
-
-# bash scripts/train_transformer.sh baseline arousal vggface2 vggface2 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 2
-# bash scripts/train_transformer.sh baseline valence vggface2 vggface2 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 3
-
-# bash scripts/train_transformer.sh baseline arousal denseface,compare compare 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 6
-# bash scripts/train_transformer.sh baseline valence denseface,compare compare 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 7
-
-
-
-
-
-# bash scripts/train_transformer.sh baseline valence denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 4
-# bash scripts/train_transformer.sh baseline valence denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 2 7
-
-
-# bash scripts/train_transformer.sh baseline arousal denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 1 4
-# bash scripts/train_transformer.sh baseline arousal denseface,vggish None 32 5e-5 0.3 256,256 100 256 4 1024 4 mse 2 7
+# bash scripts/train_transformer.sh baseline arousal denseface,compare compare 32 3e-5 0.3 256,256 100 256 4 1024 4 mse 1 4

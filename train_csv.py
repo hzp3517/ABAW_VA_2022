@@ -134,6 +134,7 @@ if __name__ == '__main__':
     best_eval_ccc = 0                           # record the best eval UAR
     best_eval_epoch = -1                        # record the best eval epoch
     best_eval_window = None
+    writer = SummaryWriter(logger_path)
 
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
@@ -187,8 +188,6 @@ if __name__ == '__main__':
         # -----------------------------------
 
         # # ---tensorboard---
-        tb_path = os.path.join(logger_path, 'tb')
-        writer = SummaryWriter(tb_path)
         for name in cur_epoch_losses:
             writer.add_scalar("Loss_{}/train".format(name), cur_epoch_losses[name], epoch)
         # # -----------------

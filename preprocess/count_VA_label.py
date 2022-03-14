@@ -4,7 +4,8 @@ import h5py
 from tqdm import tqdm
 
 target_dir = '/data9/hzp/ABAW_VA_2022/processed_data/targets/'
-set_list = ['train', 'val']
+# set_list = ['train']
+set_list = ['val']
 
 valence_cnt = {}
 arousal_cnt = {}

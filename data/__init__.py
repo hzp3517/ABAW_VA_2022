@@ -104,12 +104,14 @@ class CustomDatasetDataLoader():
         self.dataset = dataset_class(opt, **kwargs)
         print("dataset [%s] was created" % type(self.dataset).__name__)
         
+        inference = True if 'set_name' in kwargs.keys() and kwargs['set_name'] != 'train' and kwargs['set_name'] != 'trn' else False
+        
         ''' Whether to use manual collate function defined in dataset.collate_fn'''
         if self.dataset.manual_collate_fn: 
             self.dataloader = torch.utils.data.DataLoader(
                 self.dataset,
                 batch_size=opt.batch_size ,
-                shuffle=False if issubclass(dataset_class, BaseIterableDataset) else not opt.serial_batches,
+                shuffle=False if issubclass(dataset_class, BaseIterableDataset) or inference else not opt.serial_batches,
                 num_workers=int(opt.num_threads),
                 drop_last=False,
                 collate_fn=self.dataset.collate_fn,
@@ -126,7 +128,7 @@ class CustomDatasetDataLoader():
             self.dataloader = torch.utils.data.DataLoader(
                 self.dataset,
                 batch_size=batch_size,
-                shuffle=False if issubclass(dataset_class, BaseIterableDataset) else not opt.serial_batches,
+                shuffle=False if issubclass(dataset_class, BaseIterableDataset) or inference else not opt.serial_batches,
                 num_workers=int(opt.num_threads),
                 drop_last=False,
                 # pin_memory=True,

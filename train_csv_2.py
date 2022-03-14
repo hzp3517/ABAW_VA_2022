@@ -13,6 +13,7 @@ import torch
 from collections import OrderedDict
 import fcntl
 import csv
+from torch.utils.tensorboard import SummaryWriter
 
 def test(model, tst_iter):
     pass
@@ -133,6 +134,7 @@ if __name__ == '__main__':
     best_eval_ccc = 0                           # record the best eval UAR
     best_eval_epoch = -1                        # record the best eval epoch
     best_eval_window = None
+    writer = SummaryWriter(logger_path)
 
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
@@ -152,11 +154,11 @@ if __name__ == '__main__':
             model.set_input(data)           # unpack data from dataset and apply preprocessing
             model.run()                     # calculate loss functions, get gradients, update network weights
 
-            # # ---------在每个batch都获取一次loss，并加入cur_epoch_losses-------------
-            # losses = model.get_current_losses()
-            # for name in losses.keys():
-            #     cur_epoch_losses[name] += losses[name]
-            # # ---------------------------------------------------------------------
+            # ---------在每个batch都获取一次loss，并加入cur_epoch_losses-------------
+            losses = model.get_current_losses()
+            for name in losses.keys():
+                cur_epoch_losses[name] += losses[name]
+            # ---------------------------------------------------------------------
                 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
                 losses = model.get_current_losses()
@@ -178,17 +180,17 @@ if __name__ == '__main__':
         logger.info('End of training epoch %d / %d \t Time Taken: %d sec, Data loading: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time, iter_data_statis))
         model.update_learning_rate()                      # update learning rates at the end of every epoch.
 
-        # # -----得到并打印当前epoch的loss------
-        # for name in cur_epoch_losses:
-        #     cur_epoch_losses[name] /= batch_count # 这样直接对各个batch内的平均loss取平均的方法并非完全精确，因为最后一个batch内数据的数量可能少于batch_size，但应该也不会差太多。
-        # logger.info('Cur epoch {}'.format(epoch) + ' loss ' + 
-        #         ' '.join(map(lambda x:'{}:{{{}:.4f}}'.format(x, x), model.loss_names)).format(**cur_epoch_losses))
-        # # -----------------------------------
+        # -----得到并打印当前epoch的loss------
+        for name in cur_epoch_losses:
+            cur_epoch_losses[name] /= batch_count # 这样直接对各个batch内的平均loss取平均的方法并非完全精确，因为最后一个batch内数据的数量可能少于batch_size，但应该也不会差太多。
+        logger.info('Cur epoch {}'.format(epoch) + ' loss ' + 
+                ' '.join(map(lambda x:'{}:{{{}:.4f}}'.format(x, x), model.loss_names)).format(**cur_epoch_losses))
+        # -----------------------------------
 
-        # ---tensorboard---
-        # for name in cur_epoch_losses:
-        #     writer.add_scalar("Loss_{}/train".format(name), cur_epoch_losses[name], epoch)
-        # -----------------
+        # # ---tensorboard---
+        for name in cur_epoch_losses:
+            writer.add_scalar("Loss_{}/train".format(name), cur_epoch_losses[name], epoch)
+        # # -----------------
 
         # eval train set
         mse, rmse, pcc, ccc, window = eval(model, dataset)

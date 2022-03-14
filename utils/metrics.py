@@ -44,14 +44,15 @@ def smooth_predictions(preds, window=40, mean_or_binomial=True):
                     weights = binomial_weights
                 smoothed_pred.append(np.sum(pred[left: right + 1] * weights))
         smoothed_preds.append(np.array(smoothed_pred))
-    smoothed_preds = np.array(smoothed_preds)
+    smoothed_preds = np.array(smoothed_preds, dtype=object)
     return smoothed_preds
 
 def smooth_func(pred, label=None, best_window=None, logger=None):
     start = time.time()
     if best_window is None:
         best_ccc, best_window = 0, 0
-        for window in range(0, 30, 5):
+        # for window in range(0, 30, 5):
+        for window in range(0, 100, 5):
             smoothed_preds = smooth_predictions(pred, window=window)
             if label is not None:
                 mse, rmse, pcc, ccc = evaluate_regression(y_true=scratch_data(label),
@@ -68,9 +69,9 @@ def smooth_func(pred, label=None, best_window=None, logger=None):
         end = time.time()
         time_usage = end - start
         if logger:
-            logger.info('Smooth: best window %d best_ccc %.2f \t Time Taken %.4f', best_window, best_ccc, time_usage)
+            logger.info('Smooth: best window {:d} best_ccc {:.4f} \t Time Taken {:.4f}'.format(best_window, best_ccc, time_usage))
         else:
-            print('Smooth: best window %d best_ccc %.2f \t Time Taken %.4f', best_window, best_ccc, time_usage)
+            print('Smooth: best window {:d} best_ccc {:.4f} \t Time Taken {:.4f}'.format(best_window, best_ccc, time_usage))
         smoothed_preds = smooth_predictions(pred, window=best_window)
     elif best_window is not None:
         smoothed_preds = smooth_predictions(pred, window=best_window)

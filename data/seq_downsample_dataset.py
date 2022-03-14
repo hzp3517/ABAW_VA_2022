@@ -1,5 +1,5 @@
 '''
-以video为单位加载数据，适用于时序模型
+读入数据的时候在时序上降采样，每n帧做个平均算作一个时刻
 '''
 import os
 import h5py
@@ -11,21 +11,22 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import h5py
 from tqdm import tqdm
+import math
 
 import sys
 sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
 from data.base_dataset import BaseDataset#
 
-
-class SeqDataset(BaseDataset):
+class SeqDownsampleDataset(BaseDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.add_argument('--norm_method', type=str, default='trn', choices=['batch', 'trn'], help='whether normalize method to use')
         parser.add_argument('--norm_features', type=str, default='None', help='feature to normalize, split by comma, eg: "egemaps,vggface"')
+        parser.add_argument('--downsample_rate', type=int, default=1, help='combine `downsample_rate` frames in one timestamp when training')
         return parser
-
+    
     def __init__(self, opt, set_name):
-        ''' Sequential Dataset
+        ''' SingleFrame dataset
         Parameter:
         --------------------------------------
         set_name: [train, val, test, train_eval]
@@ -38,11 +39,13 @@ class SeqDataset(BaseDataset):
         self.norm_method = opt.norm_method
         self.norm_features = list(map(lambda x: x.strip(), opt.norm_features.split(',')))
         self.set_name = set_name
+        self.downsample_rate = opt.downsample_rate
         self.load_label()
         self.load_feature()
         self.manual_collate_fn = True
         print(f"Aff-Wild2 Sequential dataset {set_name} created with total length: {len(self)}")
-
+        
+    
     def normalize_on_trn(self, feature_name, features):
         '''
         features的shape：[seg_len, ft_dim]
@@ -53,7 +56,8 @@ class SeqDataset(BaseDataset):
         std_trn = np.array(mean_std_file['train']['std'])
         features = (features - mean_trn) / std_trn
         return features
-
+    
+    
     def normalize_on_batch(self, features):
         '''
         输入张量的shape：[bs, seq_len, ft_dim]
@@ -64,7 +68,8 @@ class SeqDataset(BaseDataset):
         std_f[std_f == 0.0] = 1.0
         features = (features - mean_f) / std_f
         return features
-
+    
+    
     def load_label(self):
         set_name = 'train' if self.set_name == 'train_eval' else self.set_name
         label_path = os.path.join(self.root, 'targets/{}_valid_targets.h5'.format(set_name))
@@ -72,16 +77,39 @@ class SeqDataset(BaseDataset):
         self.video_list = list(label_h5f.keys())
 
         self.target_list = []
-        for video in self.video_list:
+        for video in tqdm(self.video_list, desc='loading target'):
             video_dict = {}
             if self.set_name != 'test':
-                video_dict['valence'] = torch.from_numpy(label_h5f[video]['valence'][()]).float()
-                video_dict['arousal'] = torch.from_numpy(label_h5f[video]['arousal'][()]).float()
-                video_dict['length'] = label_h5f[video]['length'][()]
+                valence = label_h5f[video]['valence'][()]
+                arousal = label_h5f[video]['arousal'][()]
+                length = label_h5f[video]['length'][()]
+                if self.set_name == 'train': # downsample
+                    new_valence, new_arousal = [], []
+                    length = math.ceil(length * 1.0 / self.downsample_rate)
+                    if length > 1:
+                        start_list = np.arange(length - 1) * self.downsample_rate
+                        end_list = np.arange(length - 1) * self.downsample_rate + self.downsample_rate
+                        for s_idx, e_idx in zip(start_list, end_list):
+                            valence_mean = np.mean(valence[s_idx: e_idx])
+                            arousal_mean = np.mean(arousal[s_idx: e_idx])
+                            new_valence.append(valence_mean)
+                            new_arousal.append(arousal_mean)
+                    s_idx = (length - 1) * self.downsample_rate
+                    new_valence.append(np.mean(valence[s_idx:]))
+                    new_arousal.append(np.mean(arousal[s_idx:]))
+                    valence = np.array(new_valence)
+                    arousal = np.array(new_arousal)
+                video_dict['valence'] = torch.from_numpy(valence).float()
+                video_dict['arousal'] = torch.from_numpy(arousal).float()
+                video_dict['length'] = length
+                assert len(video_dict['valence']) == video_dict['length']
+                assert len(video_dict['arousal']) == video_dict['length']
             else:
                 video_dict['length'] = label_h5f[video]['length'][()]
+                
             self.target_list.append(video_dict)
-
+            
+            
     def load_feature(self):
         self.feature_data = {}
         for feature_name in self.feature_set:
@@ -92,16 +120,32 @@ class SeqDataset(BaseDataset):
             feature_list = []
             for idx, video in enumerate(tqdm(self.video_list, desc='loading {} feature'.format(feature_name))):
                 video_dict = {}
-                video_dict['fts'] = feature_h5f[video]['fts'][()] #shape:(seg_len, ft_dim)
-                # video_dict['pad'] = feature_h5f[video]['pad'][()]
-                # video_dict['valid'] = feature_h5f[video]['valid'][()]
-                assert len(video_dict['fts']) == int(self.target_list[idx]['length']), '\
-                    Data Error: In feature {}, video_id: {}, frame does not match label frame'.format(feature_name, video)
+                fts = feature_h5f[video]['fts'][()] # shape:(seg_len, ft_dim)
                 # normalize on trn:
                 if (self.norm_method=='trn') and (feature_name in self.norm_features):
-                    video_dict['fts'] = self.normalize_on_trn(feature_name, video_dict['fts'])
-                self.feature_data[feature_name].append(video_dict)
+                    fts = self.normalize_on_trn(feature_name, fts)
+                if self.set_name == 'train': # downsample
+                    new_fts = []
+                    length = len(fts)
+                    length = math.ceil(length * 1.0 / self.downsample_rate)
+                    
+                    if length > 1:
+                        start_list = np.arange(length - 1) * self.downsample_rate
+                        end_list = np.arange(length - 1) * self.downsample_rate + self.downsample_rate
+                        for s_idx, e_idx in zip(start_list, end_list):
+                            fts_mean = np.mean(fts[s_idx: e_idx], axis=0)
+                            new_fts.append(fts_mean)
+                    s_idx = (length - 1) * self.downsample_rate
+                    new_fts.append(np.mean(fts[s_idx:], axis=0))
+                    fts = np.stack(new_fts, axis=0)
+                    
+                video_dict['fts'] = fts
+                assert len(video_dict['fts']) == int(self.target_list[idx]['length']), '\
+                    Data Error: In feature {}, video_id: {}, frame does not match label frame'.format(feature_name, video)
 
+                self.feature_data[feature_name].append(video_dict)
+                
+                
     def __getitem__(self, index):
         target_data = self.target_list[index]
         feature_list = []
@@ -111,18 +155,14 @@ class SeqDataset(BaseDataset):
             feature_list.append(data)
             feature_dims.append(self.feature_data[feature_name][index]['fts'].shape[1])
         feature_dims = torch.from_numpy(np.array(feature_dims)).long()
-
-        # print(type(feature_list), type(feature_dims), type(self.video_list[index]), type(target_data), type(self.feature_set))##
-
-
         return {**{"feature_list": feature_list, "feature_dims": feature_dims, "video_id": self.video_list[index]},
                 **target_data, **{"feature_names": self.feature_set}}
-
-    
+        
+        
     def __len__(self):
         return len(self.video_list)
     
-
+    
     def collate_fn(self, batch):
         '''
         Collate functions assume batch = [Dataset[i] for i in index_set]
@@ -172,8 +212,8 @@ class SeqDataset(BaseDataset):
             'feature_names': feature_names,
             'video_id': video_id
         }
-
-
+        
+        
 if __name__ == '__main__':
     class test:
         feature_set = 'denseface'
@@ -181,9 +221,11 @@ if __name__ == '__main__':
         max_seq_len = 100
         norm_method = ''
         norm_features = ''
+        downsample_rate = 3
+        serial_batches = True
     
     opt = test()
-    a = SeqDataset(opt, 'train')
+    a = SeqDownsampleDataset(opt, 'train')
 
     iter_a = iter(a)
     data1 = next(iter_a)
