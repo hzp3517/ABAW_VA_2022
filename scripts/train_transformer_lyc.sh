@@ -36,7 +36,7 @@ cmd="python train_lyc.py --dataset_mode=seq --model=transformer --gpu_ids=$gpu_i
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
 
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec vggish 5 1
+# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec vggish 1 5
 # bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec vggish 2 2
 
 # bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec vggish 1 3

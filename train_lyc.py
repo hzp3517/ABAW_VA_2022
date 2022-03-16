@@ -93,7 +93,7 @@ if __name__ == '__main__':
     suffix = opt.name  # get logger suffix
     logger = get_logger(logger_path, suffix)            # get logger
 
-    dataset, val_dataset, train_eval_dataset = create_dataset_with_args(opt, set_name=['train', 'val', 'train_eval'])  # create a dataset given opt.dataset_mode and other options
+    dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)  # get the number of images in the dataset.
     logger.info('The number of training samples = %d' % dataset_size)
     # calculate input dims

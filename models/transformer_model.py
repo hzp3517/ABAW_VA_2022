@@ -41,10 +41,10 @@ class TransformerModel(BaseModel):
         #                     choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
         #                              'batch_vccc', 'ce'])
         # parser.add_argument('--loss_weights', type=float, default=1, nargs='+')
-        parser.add_argument('--loss_type', type=str, default='mse',
+        parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
                             choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
                                      'batch_vccc', 'ce'])
-        parser.add_argument('--loss_weights', type=float, default=1)
+        parser.add_argument('--loss_weights', type=float, default=1, nargs='+')
         parser.add_argument('--cls_loss', default=False, action='store_true', help='whether to cls and average as loss')
         parser.add_argument('--cls_weighted', default=False, action='store_true', help='whether to use weighted cls')
 

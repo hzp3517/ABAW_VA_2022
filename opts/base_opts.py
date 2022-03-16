@@ -130,6 +130,9 @@ class BaseOptions():
         if opt.suffix:
             suffix = ('_' + opt.suffix.format(**vars(opt))) if opt.suffix != '' else ''
             suffix = suffix.replace(',', '-')
+            suffix = suffix.replace('\'', '')
+            suffix = suffix.replace('[', '')
+            suffix = suffix.replace(']', '')
             opt.name = opt.name + suffix
             print("Expr Name:", opt.name)
         
