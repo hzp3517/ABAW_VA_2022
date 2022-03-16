@@ -13,10 +13,7 @@ from torch.nn.utils.rnn import pad_sequence
 import h5py
 from tqdm import tqdm
 import cv2
-
-import sys
-sys.path.append('/data2/hzp/ABAW_VA_2022/code')#
-from data.base_dataset import BaseIterableDataset#
+from data.base_dataset import BaseIterableDataset
 
 class FrameDataset(BaseIterableDataset):
     @staticmethod

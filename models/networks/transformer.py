@@ -88,7 +88,7 @@ class _TransformerEncoder(nn.Module):
 class TransformerEncoder(nn.Module):
     def __init__(self, input_dim, num_layers, nhead, dim_feedforward=None, \
                             affine=False, affine_dim=None, embd_method='maxpool', \
-                            max_position_embeddings=512, pe_type='sin_cos'):
+                            max_position_embeddings=512, use_pe=True):
         super().__init__()
         self.affine = affine
         self.max_position_embeddings = max_position_embeddings
@@ -107,21 +107,16 @@ class TransformerEncoder(nn.Module):
         #         get_sinusoid_encoding_table(self.max_position_embeddings, input_dim, padding_idx=0),
         #         freeze=True
         #     )
-
-        self.pe_type = pe_type
-        if pe_type == 'sincos':
-            self.position_embeddings = nn.Embedding.from_pretrained(
-                    get_sinusoid_encoding_table(self.max_position_embeddings, affine_dim, padding_idx=0),
-                    freeze=True
-                )
-        elif pe_type == 'embedding':
-            self.position_embeddings = nn.Embedding(self.max_position_embeddings, affine_dim, padding_idx=0)
-        
+        self.position_embeddings = nn.Embedding.from_pretrained(
+                get_sinusoid_encoding_table(self.max_position_embeddings, affine_dim, padding_idx=0),
+                freeze=True
+            )
         encoder_layer = nn.TransformerEncoderLayer(d_model=_inp, nhead=nhead, dim_feedforward=dim_feedforward)
         self.encoder = _TransformerEncoder(encoder_layer=encoder_layer, num_layers=num_layers)
         self.linear = nn.Linear(_inp, _inp)
         self.tanh = nn.Tanh()
-
+        self.use_pe = use_pe
+   
     def post_process(self, x):
         if self.embd_method == 'maxpool':
             x = x.transpose(1, 2)                               # out.shape => [batch_size, ft_dim, seq_len]  
@@ -141,7 +136,7 @@ class TransformerEncoder(nn.Module):
             x = self.affine(x)
         position_ids = torch.arange(seq_len, dtype=torch.long, device=x.device)
         position_ids = position_ids.unsqueeze(1).expand([seq_len, batch_size])
-        if self.pe_type.lower() != 'none':
+        if self.use_pe:
             position_embeddings = self.position_embeddings(position_ids)
             x = x + position_embeddings
         

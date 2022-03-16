@@ -17,10 +17,7 @@ import h5py
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from transformers import Wav2Vec2Processor
-
-import sys
-sys.path.append('/data2/hzp/ABAW_VA_2022/code')#
-from data.base_dataset import BaseIterableDataset#
+from data.base_dataset import BaseIterableDataset
 
 class AudioClipDataset(BaseIterableDataset):
     @staticmethod

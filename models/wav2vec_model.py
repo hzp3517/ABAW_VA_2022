@@ -133,18 +133,6 @@ class Wav2vecModel(BaseModel):
         aligned_len = self.target.shape[1]
         batch_ft = self.align_timestamp(batch_ft, aligned_len) # (bs, num_frames, dim=768)
 
-        # # 这里有问题，应该要对到标签时刻
-        # # 将ft的长度与标签的长度对齐
-        # aligned_len = self.target.shape[1]
-        # if batch_ft.shape[1] < aligned_len:
-        #     pad_ft = []
-        #     for ft in batch_ft:
-        #         pad_ft.append(ft[-1])
-        #     pad_ft = np.stack(pad_ft)
-        #     batch_ft = np.concatenate((batch_ft, pad_ft), axis=0)
-        # elif batch_ft.shape[1] > aligned_len:
-        #     batch_ft = batch_ft[:, :aligned_len, :]
-
         pred, _ = self.net_reg(batch_ft) # (bs, aligned_len_speech, 2) or (bs, aligned_len_speech, 1)
         return pred
 

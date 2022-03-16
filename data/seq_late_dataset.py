@@ -11,10 +11,7 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import h5py
 from tqdm import tqdm
-
-import sys
-sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
-from data.base_dataset import BaseDataset#
+from data.base_dataset import BaseDataset
 
 
 class SeqDataset(BaseDataset):

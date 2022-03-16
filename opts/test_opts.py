@@ -14,5 +14,9 @@ class TestOptions(BaseOptions):
         parser.add_argument('--test_checkpoints', type=str, help='Use which models as final submition(ensemble)')
         # parser.add_argument('--write_sub_results', default=False, action='store_true', help='whether to store result of all checkpoints')
         parser.add_argument('--test_log_dir', type=str, default='./test_logs', help='test logs are saved here')
+
+        # for lyc model
+        parser.add_argument('--prefix_list', type=str, default='None', help='pth file name befor _net_xxx.pth')
+        parser.add_argument('--test_target', type=str, default='None', help='arousal, valence')
         self.isTrain = False
         return parser

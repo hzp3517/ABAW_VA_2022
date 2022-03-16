@@ -1,5 +1,5 @@
 '''
-读入数据的时候在时序上降采样，每n帧做个平均算作一个时刻
+读入数据的时候在时序上降采样，每n帧做个平均算作一个时刻。inference时不变。
 '''
 import os
 import h5py
@@ -12,10 +12,7 @@ from torch.nn.utils.rnn import pad_sequence
 import h5py
 from tqdm import tqdm
 import math
-
-import sys
-sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
-from data.base_dataset import BaseDataset#
+from data.base_dataset import BaseDataset
 
 class SeqDownsampleDataset(BaseDataset):
     @staticmethod

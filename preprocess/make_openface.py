@@ -48,8 +48,6 @@ def get_basename(path):
 
 
 def normalize(c_array, min_c, max_c):
-    # if max_c < min_c:##
-    #     print(max_c, min_c)##
     assert max_c >= min_c
     if max_c == min_c:
         return np.zeros(len(c_array))

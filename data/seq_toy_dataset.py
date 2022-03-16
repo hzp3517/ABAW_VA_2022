@@ -11,10 +11,8 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import h5py
 from tqdm import tqdm
-
-import sys
-sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
 from data.base_dataset import BaseDataset#
+from utils.bins import get_center_and_bounds
 
 
 class SeqToyDataset(BaseDataset):
@@ -28,7 +26,7 @@ class SeqToyDataset(BaseDataset):
         ''' Sequential Dataset
         Parameter:
         --------------------------------------
-        set_name: [train, val, test]
+        set_name: [train, val, test, train_eval]
         '''
         super().__init__(opt)
         self.root = '/data9/hzp/ABAW_VA_2022/processed_data/toy'
@@ -37,6 +35,11 @@ class SeqToyDataset(BaseDataset):
         self.norm_method = opt.norm_method
         self.norm_features = list(map(lambda x: x.strip(), opt.norm_features.split(',')))
         self.set_name = set_name
+        
+        bin_centers, bin_bounds = get_center_and_bounds(opt.cls_weighted)
+        self.bin_centers = dict([(key, np.array(value)) for key, value in bin_centers.items()])
+        self.bin_bounds = dict([(key, np.array(value)) for key, value in bin_bounds.items()])
+        
         self.load_label()
         self.load_feature()
         self.manual_collate_fn = True
@@ -65,7 +68,8 @@ class SeqToyDataset(BaseDataset):
         return features
 
     def load_label(self):
-        label_path = os.path.join(self.root, 'targets/{}_valid_targets.h5'.format(self.set_name))
+        set_name = 'train' if self.set_name == 'train_eval' else self.set_name
+        label_path = os.path.join(self.root, 'targets/{}_valid_targets.h5'.format(set_name))
         label_h5f = h5py.File(label_path, 'r')
         self.video_list = list(label_h5f.keys())
 
@@ -76,6 +80,12 @@ class SeqToyDataset(BaseDataset):
                 video_dict['valence'] = torch.from_numpy(label_h5f[video]['valence'][()]).float()
                 video_dict['arousal'] = torch.from_numpy(label_h5f[video]['arousal'][()]).float()
                 video_dict['length'] = label_h5f[video]['length'][()]
+                for target in ['valence', 'arousal']:
+                    bin_labels = torch.zeros((len(video_dict[target]), ), dtype=torch.long)
+                    for b in range(22):
+                        index = (video_dict[target] < self.bin_bounds[target][b+1]) & (video_dict[target] > self.bin_bounds[target][b])
+                        bin_labels[index] = b
+                    video_dict[target+'_cls'] = bin_labels #[L, ]
             else:
                 video_dict['length'] = label_h5f[video]['length'][()]
             self.target_list.append(video_dict)
@@ -84,7 +94,8 @@ class SeqToyDataset(BaseDataset):
         self.feature_data = {}
         for feature_name in self.feature_set:
             self.feature_data[feature_name] = []
-            feature_path = os.path.join(self.root, 'features/{}_{}.h5'.format(self.set_name, feature_name))
+            set_name = 'train' if self.set_name == 'train_eval' else self.set_name
+            feature_path = os.path.join(self.root, 'features/{}_{}.h5'.format(set_name, feature_name))
             feature_h5f = h5py.File(feature_path, 'r')
             feature_list = []
             for idx, video in enumerate(tqdm(self.video_list, desc='loading {} feature'.format(feature_name))):
@@ -142,6 +153,8 @@ class SeqToyDataset(BaseDataset):
         if self.set_name != 'test':
             arousal = pad_sequence([sample['arousal'] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
             valence = pad_sequence([sample['valence'] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
+            arousal_cls = pad_sequence([sample['arousal_cls'] for sample in batch], padding_value=torch.tensor(-1), batch_first=True)
+            valence_cls = pad_sequence([sample['valence_cls'] for sample in batch], padding_value=torch.tensor(-1), batch_first=True)
         
         feature_dims = batch[0]['feature_dims']
         feature_names = batch[0]['feature_names']
@@ -156,6 +169,8 @@ class SeqToyDataset(BaseDataset):
             'feature': feature.float(), 
             'arousal': arousal.float(), 
             'valence': valence.float(),
+            'arousal_cls': arousal_cls.long(),
+            'valence_cls': valence_cls.long(),
             'mask': mask.float(),
             'length': length,
             'feature_dims': feature_dims,
@@ -175,8 +190,10 @@ if __name__ == '__main__':
     class test:
         feature_set = 'vggface2'
         dataroot = '/data9/hzp/ABAW_VA_2022/processed_data/'
+        max_seq_len = 100
         norm_method = 'trn'
         norm_features = 'vggface2'
+        cls_weighted = False
     
     opt = test()
     a = SeqToyDataset(opt, 'train')

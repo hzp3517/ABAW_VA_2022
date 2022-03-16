@@ -5,6 +5,9 @@ import torch.nn.functional as F
 from audtorch.metrics import ConcordanceCC, PearsonR
 
 class CCCLoss(nn.Module):
+    '''
+    目前lrc用的ccc loss版本
+    '''
     def __init__(self, reduction='mean', batch_first=True, batch_compute=False):
         super(CCCLoss, self).__init__()
         self.reduction = reduction

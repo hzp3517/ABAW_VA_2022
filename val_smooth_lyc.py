@@ -41,13 +41,50 @@ def load_config(opt_path):
     trn_opt.serial_batches = True # 顺序读入
     return trn_opt
 
-def load_model_from_checkpoint(opt_config, cpkt_dir):
+
+def load_networks_folder(opt_config, folder_path, prefix):
+    """Load all the networks from a folder.
+
+    """
     model = create_model(opt_config)
-    model.load_networks_folder(cpkt_dir)
+
+    checkpoints = list(filter(lambda x: x.endswith('.pth'), os.listdir(folder_path)))
+    for name in model.model_names:
+        if isinstance(name, str):
+            # load_filename = list(filter(lambda x: x.split('.')[0].endswith('net'+name), checkpoints))
+            # assert len(load_filename) == 1, 'Exists file {}'.format(load_filename)
+            # load_filename = load_filename[0]
+
+            load_filename = prefix + '_net' + name + '.pth'
+            load_path = os.path.join(folder_path, load_filename)
+
+            print(load_path)##
+
+            assert os.path.exists(load_path)
+
+            net = getattr(model, 'net' + name)
+            if isinstance(net, torch.nn.DataParallel):
+                net = net.module
+            print('loading the model from %s' % load_path)
+            state_dict = torch.load(load_path, map_location=model.device)
+            if hasattr(state_dict, '_metadata'):
+                del state_dict._metadata
+
+            net.load_state_dict(state_dict)
+
     model.eval()
     model.cuda()
     model.isTrain = False
     return model
+
+
+# def load_model_from_checkpoint(opt_config, cpkt_dir, prefix): 
+#     model = create_model(opt_config)
+#     model = load_networks_folder(model, cpkt_dir, prefix)
+#     model.eval()
+#     model.cuda()
+#     model.isTrain = False
+#     return model
 
 def load_dim(trn_opt):
     if trn_opt.feature_set != 'None':
@@ -83,8 +120,14 @@ def eval_for_val(opt, model, val_dataset, target, pred_save_dir=None, is_smooth=
         model.set_input(data)         # unpack data from dataset and apply preprocessing
         model.test()
         lengths = data['length'].numpy()
-        pred = remove_padding(model.output.detach().cpu().numpy(), lengths)
-        label = remove_padding(data[opt.target].numpy(), lengths)
+        # pred = remove_padding(model.output.detach().cpu().numpy(), lengths)
+        if model.target_name == 'both':
+            pred = remove_padding(model.output[..., 0 if target == 'valence' else 1].detach().cpu().numpy(),
+                                  lengths)  # [size,
+        else:
+            pred = remove_padding(model.output.detach().cpu().numpy(), lengths)  # [size,
+        # label = remove_padding(data[opt.target].numpy(), lengths)
+        label = remove_padding(data[target].numpy(), lengths)
         total_pred += pred
         total_label += label
 
@@ -130,11 +173,12 @@ if __name__ == '__main__':
     mkdir(opt.test_log_dir)
 
     checkpoints = opt.test_checkpoints.strip().split(';')
+    prefixs = opt.prefix_list.strip().split(';')
     print('---------------------------------')#
     print(checkpoints)#
     print('---------------------------------')#
 
-    for checkpoint in checkpoints:
+    for checkpoint, prefix in zip(checkpoints, prefixs):
         if len(checkpoint) == 0:
             continue
         checkpoint = checkpoint.replace(' ', '')
@@ -144,20 +188,21 @@ if __name__ == '__main__':
 
         checkpoint_dir = os.path.join(opt.checkpoints_dir, checkpoint)
         val_dataset = create_dataset_with_args(trn_opt, set_name=['val'])[0]  # create a dataset given opt.dataset_mode and other options
-        model = load_model_from_checkpoint(trn_opt, checkpoint_dir)
+        # model = load_model_from_checkpoint(trn_opt, checkpoint_dir, prefix)
+        model = load_networks_folder(trn_opt, checkpoint_dir, prefix)
 
         print('Evaluating ... \n')
         npy_save_dir = os.path.join(opt.test_log_dir, 'preds', checkpoint)
         result_save_dir = os.path.join(opt.test_log_dir, 'results', checkpoint)
-        result_save_path = os.path.join(result_save_dir, 'result_{}.txt'.format(trn_opt.target))
+        result_save_path = os.path.join(result_save_dir, 'result_{}.txt'.format(opt.test_target))
         logger_save_dir = os.path.join(opt.test_log_dir, 'logs', checkpoint)   # get logger path
 
         mkdir(npy_save_dir)
         mkdir(result_save_dir)
         mkdir(logger_save_dir)
 
-        logger = get_val_logger(logger_save_dir, trn_opt.target)            # get logger
-        mse, rmse, pcc, ccc, best_window = eval_for_val(trn_opt, model,val_dataset, trn_opt.target, pred_save_dir=npy_save_dir, is_smooth=True, logger=logger)
+        logger = get_val_logger(logger_save_dir, opt.test_target)            # get logger
+        mse, rmse, pcc, ccc, best_window = eval_for_val(trn_opt, model,val_dataset, opt.test_target, pred_save_dir=npy_save_dir, is_smooth=True, logger=logger)
         metrics_smoothed = {'mse': mse, 'rmse': rmse, 'pcc': pcc, 'ccc': ccc, 'best_window': best_window}
         with open(result_save_path, 'w') as f:
             for key in metrics_smoothed.keys():
