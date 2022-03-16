@@ -6,9 +6,10 @@ import numpy as np
 import subprocess
 import librosa
 import scipy.signal as spsig
-from transformers import Wav2Vec2Processor, Wav2Vec2Model
+from transformers import Wav2Vec2Processor
 import sys
 from tqdm import tqdm
+import fairseq
 
 sys.path.append('/data2/hzp/ABAW_VA_2022/code/preprocess')
 from tools.base_worker import BaseWorker
@@ -25,14 +26,21 @@ class Wav2VecExtractor(object):
         # self.downsample = downsample
         self.device = torch.device('cuda:{}'.format(gpu))
         self.max_seg_len = max_seg_len
+        ckpt_path = '/data2/hzp/ABAW_VA_2022/code/preprocess/tools/wav2vec_ckpt/checkpoint_20_120000.pt'
         if use_asr_based_model:
             print('[INFO] use asr based model')
             self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
-            self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h").to(self.device)
+            # self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h").to(self.device)
+            self.model, _, _ = fairseq.checkpoint_utils.load_model_ensemble_and_task([ckpt_path])
+            self.model = self.model[0]
         else:
             print('[INFO] use vanilla based model')
             self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
-            self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base").to(self.device)
+            # self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base").to(self.device)
+            self.model, _, _ = fairseq.checkpoint_utils.load_model_ensemble_and_task([ckpt_path])
+            self.model = self.model[0]
+        self.model.eval()
+        self.model.to(self.device)
         
     @staticmethod
     def read_audio(self, wav_path):
@@ -62,7 +70,10 @@ class Wav2VecExtractor(object):
         for speech in tqdm(speech_list[:-1]):
             input_values = self.processor(speech, return_tensors="pt", sampling_rate=sr).input_values.to(self.device)
             with torch.no_grad():
-                ft = self.model(input_values).last_hidden_state
+                # ft = self.model(input_values).last_hidden_state
+                ft = self.model(input_values, features_only=True)
+                ft = ft['x']
+
             ft = torch.squeeze(ft).cpu().numpy()
             # 对于前面的片段，强制抽出的帧数与max_seg_len对应，避免多段累积造成较大的误差
             num_frames = int(self.max_seg_len / 0.02) # wav2vec为0.02s一帧
@@ -81,7 +92,10 @@ class Wav2VecExtractor(object):
         speech = speech_list[-1]
         input_values = self.processor(speech, return_tensors="pt", sampling_rate=sr).input_values.to(self.device)
         with torch.no_grad():
-            ft = self.model(input_values).last_hidden_state
+            # ft = self.model(input_values).last_hidden_state
+            ft = self.model(input_values, features_only=True)
+            ft = ft['x']
+
         ft = torch.squeeze(ft).cpu().numpy()
         ft_list.append(ft)
         

@@ -22,8 +22,8 @@ run_idx=$4
 gpu_ids=$5
 
 
-cmd="python train_lyc.py --dataset_mode=seq --model=transformer --gpu_ids=$gpu_ids
---log_dir=$log_dir --checkpoints_dir=$checkpoints_dir --print_freq=20
+cmd="python train_lyc_seed.py --dataset_mode=seq --model=transformer --gpu_ids=$gpu_ids
+--log_dir=$log_dir --checkpoints_dir=$checkpoints_dir --print_freq=2
 --hidden_size=$hidden_size --regress_layers=$regress_layers --max_seq_len=$max_seq_len
 --num_layers=$num_layers --ffn_dim=$ffn_dim --nhead=$nhead
 --feature_set=$feature --target=$target --loss_type=$loss_type --loss_weights=$loss_weights --use_pe
@@ -36,8 +36,8 @@ cmd="python train_lyc.py --dataset_mode=seq --model=transformer --gpu_ids=$gpu_i
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
 
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec vggish 1 5
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec vggish 2 2
+# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT None 1 0
+# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec None 2 4
 
-# bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec vggish 1 3
-# bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec vggish 2 4
+# bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec_TAPT compare 1 3
+# bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec compare 2 4

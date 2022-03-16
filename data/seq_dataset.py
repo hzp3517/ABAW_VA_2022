@@ -11,8 +11,13 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import h5py
 from tqdm import tqdm
+
+import sys
+sys.path.append('/data2/hzp/ABAW_VA_2022/code')
 from data.base_dataset import BaseDataset#
 from utils.bins import get_center_and_bounds
+
+
 
 
 class SeqDataset(BaseDataset):
@@ -29,7 +34,7 @@ class SeqDataset(BaseDataset):
         set_name: [train, val, test, train_eval]
         '''
         super().__init__(opt)
-        self.root = '/data9/hzp/ABAW_VA_2022/processed_data/'
+        self.root = '/data2/hzp/ABAW_VA_2022/processed_data/'
         # self.root = '/data9/hzp/ABAW_VA_2022/processed_data/toy'
 
         self.feature_set = list(map(lambda x: x.strip(), opt.feature_set.split(',')))

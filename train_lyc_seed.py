@@ -87,14 +87,15 @@ if __name__ == '__main__':
     best_window = None
     opt = TrainOptions().parse()  # get training options
 
-    # seed = 100 + opt.run_idx
-    # seed_everything(seed)
+    seed = 99 + opt.run_idx
+    seed_everything(seed)
 
     if not os.path.exists(opt.log_dir):
         os.makedirs(opt.log_dir)
     logger_path = os.path.join(opt.log_dir, opt.name)  # get logger path
     suffix = opt.name  # get logger suffix
     logger = get_logger(logger_path, suffix)            # get logger
+    logger.info('Using seed: {}'.format(seed))
 
     dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)  # get the number of images in the dataset.

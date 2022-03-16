@@ -165,10 +165,10 @@ class TransformerModel(BaseModel):
     
     def forward_step(self, input, mask):
         if self.encoder_type == 'fft':
-            out, hidden_states = self.net_seq(input, mask) # hidden_states: layers * (seq_len, bs, ft_dim)
+            out, hidden_states = self.net_seq(input, mask) # hidden_states: layers * (seq_len, bs, hidden_size)
         else:
-            out, hidden_states = self.net_seq(input) # hidden_states: layers * (seq_len, bs, ft_dim)
-        last_hidden = hidden_states[-1].transpose(0, 1) # (bs, seq_len, ft_dim)
+            out, hidden_states = self.net_seq(input) # hidden_states: layers * (seq_len, bs, hidden_size)
+        last_hidden = hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
         prediction, _ = self.net_reg(last_hidden)
         logits = None
         if self.cls_loss:

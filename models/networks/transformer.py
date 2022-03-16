@@ -108,7 +108,7 @@ class TransformerEncoder(nn.Module):
         #         freeze=True
         #     )
         self.position_embeddings = nn.Embedding.from_pretrained(
-                get_sinusoid_encoding_table(self.max_position_embeddings, affine_dim, padding_idx=0),
+                get_sinusoid_encoding_table(self.max_position_embeddings, _inp, padding_idx=0),
                 freeze=True
             )
         encoder_layer = nn.TransformerEncoderLayer(d_model=_inp, nhead=nhead, dim_feedforward=dim_feedforward)

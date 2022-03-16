@@ -21,3 +21,5 @@ smile.log
 *_toy_*
 *debug*
 *_logs
+wav2vec_ckpt
+.wav2vec.py.swp

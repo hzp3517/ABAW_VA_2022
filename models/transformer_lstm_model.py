@@ -1,8 +1,5 @@
 '''
-将实际的max_seq_len扩大到设定值的downsample_rate倍
-切完target和feature的segment后，将一个batch的feature一起降采样到downsample_rate倍，
-    （如果batch的实际长度不足，至少保证降采样后有一个数据）
-送入模型预测，预测出的pred再一起upsample到和target的长度对齐。
+在transformer encoder上再加一层lstm-xl，若使用预训练过的transformer encoder，则直接将该层以及前面的fc层冻结
 '''
 
 import torch
@@ -13,19 +10,20 @@ import torch.nn.functional as F
 # from .networks.regressor import FcRegressor
 # from .networks.transformer import TransformerEncoder#
 
+
 import sys
 sys.path.append('/data2/hzp/ABAW_VA_2022/code')
 from models.base_model import BaseModel
 from models.networks.regressor import FcRegressor
-from models.networks.fft import FFTEncoder
+# from models.networks.fft import FFTEncoder
+from models.networks.fc_encoder import FcEncoder
 from models.networks.transformer import TransformerEncoder
-# from models.networks.transformer_xl import TransformerXLModel
-
+from models.networks.lstm_encoder import LSTMEncoder
 from models.loss import CCCLoss, MSELoss, MultipleLoss
 from utils.bins import get_center_and_bounds
 
 
-class TransformerDsUsModel(BaseModel):
+class TransformerLstmModel(BaseModel):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.add_argument('--max_seq_len', type=int, default=100, help='max sequence length of transformer')
@@ -37,12 +35,7 @@ class TransformerDsUsModel(BaseModel):
         parser.add_argument('--dropout_rate', default=0.3, type=float, help='drop out rate of FC layers')
         parser.add_argument('--target', default='arousal', type=str, choices=['valence', 'arousal', 'both'], help='one of [arousal, valence]')
         parser.add_argument('--use_pe', action='store_true', help='whether to use position encoding')
-        parser.add_argument('--encoder_type', type=str, default='transformer', choices=['transformer', 'fft'], help='whether to use position encoding')
-
-        # parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
-        #                     choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
-        #                              'batch_vccc', 'ce'])
-        # parser.add_argument('--loss_weights', type=float, default=1, nargs='+')
+        parser.add_argument('--encoder_type', type=str, default='transformer', choices=['transformer'], help='whether to use position encoding')
         parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
                             choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
                                      'batch_vccc', 'ce'])
@@ -50,9 +43,9 @@ class TransformerDsUsModel(BaseModel):
         parser.add_argument('--cls_loss', default=False, action='store_true', help='whether to cls and average as loss')
         parser.add_argument('--cls_weighted', default=False, action='store_true', help='whether to use weighted cls')
 
-        parser.add_argument('--save_model', default=False, action='store_true', help='whether to save_model at each epoch')
-        # parser.add_argument('--smooth', default=False, action='store_true', help='whether to use_smooth')
-        parser.add_argument('--downsample_rate', type=int, default=1, help='pick 1 frame from `downsample_rate` frames')
+        parser.add_argument('--transformer_pretrained', default=False, action='store_true', help='whether to use the pretrained transformer')
+        parser.add_argument('--pth_path', type=str, default='', help='the pth file path of the pretrained transformer model')
+        parser.add_argument('--residual', type=str, default='y', choices=['y', 'n'], help='whether to use the residual connection to skip the transformer encoder')
         return parser
 
     def __init__(self, opt, logger=None):
@@ -63,50 +56,62 @@ class TransformerDsUsModel(BaseModel):
         """
         super().__init__(opt, logger)
         self.loss_names = ['reg']
-        self.model_names = ['_seq', '_reg']
-        self.pretrained_model = []
-        self.downsample_rate = opt.downsample_rate
-        self.max_seq_len = opt.max_seq_len * self.downsample_rate
+        self.model_names = ['_fc', '_te', '_lstm', '_reg']
+        
+        self.max_seq_len = opt.max_seq_len
         self.use_pe = opt.use_pe
         self.encoder_type = opt.encoder_type
         self.loss_type = opt.loss_type
-        
-        
-        # net seq (already include a linear projection before the transformer encoder)
         if opt.hidden_size == -1:
             opt.hidden_size = min(opt.input_dim // 2, 512)
+        self.hidden_size = opt.hidden_size
+        self.cls_loss = opt.cls_loss
         if 'ce' in opt.loss_type:
             opt.cls_loss = True
-            
-        if self.encoder_type == 'transformer':
-            self.net_seq = TransformerEncoder(opt.input_dim, opt.num_layers, opt.nhead, \
-                                            dim_feedforward=opt.ffn_dim, affine=True, \
-                                            affine_dim=opt.hidden_size, use_pe=self.use_pe)
-        elif self.encoder_type == 'fft':
-            self.net_seq = FFTEncoder(opt.input_dim, opt.num_layers, opt.nhead,\
-                                dim_feedforward=opt.ffn_dim, affine=True, affine_dim=opt.hidden_size)
+        self.target_name = opt.target
+        self.transformer_pretrained = opt.transformer_pretrained
+        self.residual = opt.residual
 
-        # elif self.encoder_type == 'transformer_xl':
-        #     self.net_seq = TransformerXLModel(opt.input_dim, opt.num_layers, opt.nhead, opt.hidden_size, opt.nhead,
-        #                                       opt.hidden_size, opt.dropout_rate, opt.dropout_rate, pre_lnorm=True,
-        #                                       max_seq_len=opt.max_seq_len, attn_type=0)
+        if self.cls_loss:
+            bin_centers, bin_bounds = get_center_and_bounds(opt.cls_weighted)
+            self.bin_centers = dict([(key, np.array(value)) for key, value in bin_centers.items()])
+            self.bin_bounds = dict([(key, np.array(value)) for key, value in bin_bounds.items()])
+
+        # net fc fusion
+        self.net_fc = FcEncoder(opt.input_dim, [opt.hidden_size], dropout=0.1, dropout_input=False)
+
+        # net transformer encoder (already include a linear projection before the transformer encoder)
+        if self.encoder_type == 'transformer':
+            self.net_te = TransformerEncoder(opt.hidden_size, opt.num_layers, opt.nhead, \
+                                            dim_feedforward=opt.ffn_dim, affine=False, use_pe=self.use_pe)
+
+        # load pretrained weights
+        if self.transformer_pretrained:
+            self.pretrained_model = ['_fc', '_te']
+            # 加载预训练模型权重
+            pre_model_path = opt.pth_path.strip()
+            pre_model = torch.load(pre_model_path)
+            fc_model_dict = self.net_fc.state_dict()
+            fc_state_dict = {k.replace('affine', 'module.0'): v for k, v in pre_model.items() if k.startswith('affine')}
+            fc_model_dict.update(fc_state_dict)
+            self.net_fc.load_state_dict(fc_model_dict)
+            te_model_dict = self.net_te.state_dict()
+            te_state_dict = {k: v for k, v in pre_model.items() if k in te_model_dict.keys()}
+            te_model_dict.update(te_state_dict)
+            self.net_te.load_state_dict(te_model_dict)
+        else:
+            self.pretrained_model = []
+
+        # net lstm-xl
+        self.net_lstm = LSTMEncoder(opt.hidden_size, opt.hidden_size)
 
         # net regression
         layers = list(map(lambda x: int(x), opt.regress_layers.split(',')))
-        self.target_name = opt.target
-        self.loss_type = opt.loss_type
-        self.cls_loss = opt.cls_loss
-
-        bin_centers, bin_bounds = get_center_and_bounds(opt.cls_weighted)
-        self.bin_centers = dict([(key, np.array(value)) for key, value in bin_centers.items()])
-        self.bin_bounds = dict([(key, np.array(value)) for key, value in bin_bounds.items()])
-
-        self.hidden_size = opt.hidden_size
         output_dim = 22 if self.cls_loss else 1
         if self.target_name == 'both':
             output_dim *= 2
-
         self.net_reg = FcRegressor(opt.hidden_size, layers, output_dim, dropout=opt.dropout_rate)
+
         # settings
         if self.isTrain:
             if self.isTrain:
@@ -142,38 +147,6 @@ class TransformerDsUsModel(BaseModel):
                     self.cls_target = input[self.target_name].to(self.device)
 
 
-    def downsample(self, data_tensor, step):
-        '''
-        data_tensor: (bs, seq_len) 或 (bs, seq_len, ft_dim)
-        '''
-        seq_len = data_tensor.shape[1] # seq_len
-
-        # 保证降采样后至少有一个数据
-        if int(step / 2) >= seq_len:
-            ds_index = [int(seq_len / 2)]
-        else:
-            ds_index = torch.tensor([i + int(step / 2) for i in range(0, seq_len - int(step/2), step)])
-
-        if len(data_tensor.shape) == 2:
-            data_tensor = data_tensor[:, ds_index]
-        else: # len(data_tensor.shape) == 3
-            data_tensor = data_tensor[:, ds_index, :]
-        return data_tensor
-
-
-    def interpolate_prediction(self, data_tensor, output_size):
-        '''
-        data_tensor: (bs, pred_len, pred_dim)
-        '''
-        if data_tensor == None:
-            return None
-
-        data_tensor = data_tensor.permute(0, 2, 1) # (bs, pred_dim (channel), pred_len (width))
-        output = F.interpolate(data_tensor, output_size, mode='linear', align_corners=True)
-        output = output.permute(0, 2, 1) # (bs, us_pred_len, pred_dim)
-        return output
-
-
     def run(self):
         """After feed a batch of samples, Run the model."""
         batch_size = self.target.size(0)
@@ -181,45 +154,39 @@ class TransformerDsUsModel(BaseModel):
         # calc num of splited segments
         split_seg_num = batch_max_length // self.max_seq_len + int(batch_max_length % self.max_seq_len != 0)
         # forward in each small steps
-        self.output = [] 
-        # mems = None
+        self.output = []
+        previous_h = torch.zeros(1, batch_size, self.hidden_size).float().to(self.device) 
+        previous_c = torch.zeros(1, batch_size, self.hidden_size).float().to(self.device)
         for step in range(split_seg_num):
             feature_step = self.feature[:, step*self.max_seq_len: (step+1)*self.max_seq_len]
-            mask = self.mask[:, step*self.max_seq_len: (step+1)*self.max_seq_len]
-
-            feature_step = self.downsample(feature_step, self.downsample_rate)
-            ds_mask = mask.clone()
-            ds_mask = self.downsample(ds_mask, self.downsample_rate)
-
-            # if self.encoder_type == 'transformer_xl':
-            #     prediction, logits, mems = self._forward_step(feature_step, mems)
-            # else:
-            #     prediction, logits = self.forward_step(feature_step, ds_mask)
-            prediction, logits = self.forward_step(feature_step, ds_mask)
-            prediction = self.interpolate_prediction(prediction, mask.shape[1]) # do upsampling to the prediction sequence
-            if self.cls_loss:
-                logits = logits.transpose(1, 2).reshape(logits.shape[:-2] + 22 * 2) # [B, 22, L, 2] -> [B, L, 22, 2] -> [B, L, 44]
-                logits = self.interpolate_prediction(logits, len(mask)) # [B, us_L, 44]
-                logits = logits.reshape(logits.shape[:-1] + (22, 2)).transpose(1, 2) #[B, L, 44] -> [B, L, 22, 2] -> [B, 22, L, 2]
-
+            prediction, (previous_h, previous_c), logits = self.forward_step(feature_step, (previous_h, previous_c))
+            previous_h = previous_h.detach()
+            previous_c = previous_c.detach()
             self.output.append(prediction.squeeze(dim=-1))
             # backward
             if self.isTrain:
                 self.optimizer.zero_grad()  
                 target = self.target[:, step*self.max_seq_len: (step+1)*self.max_seq_len]
+                mask = self.mask[:, step*self.max_seq_len: (step+1)*self.max_seq_len]
                 cls_target = None if not self.cls_loss else self.cls_target[:, step*self.max_seq_len: (step+1)*self.max_seq_len]
                 self.backward_step(prediction, target, mask, logits, cls_target)
                 self.optimizer.step() 
         self.output = torch.cat(self.output, dim=1)
     
 
-    def forward_step(self, input, mask):
-        if self.encoder_type == 'fft':
-            out, hidden_states = self.net_seq(input, mask) # hidden_states: layers * (seq_len, bs, hidden_size)
-        else:
-            out, hidden_states = self.net_seq(input) # hidden_states: layers * (seq_len, bs, hidden_size)
-        last_hidden = hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
-        prediction, _ = self.net_reg(last_hidden)
+    def forward_step(self, input, states):
+        fusion = self.net_fc(input)
+
+        if self.transformer_pretrained: # if use the pretrained transformer encoder, freeze that model.
+            with torch.no_grad():
+                out, te_hidden_states = self.net_te(fusion) # te_hidden_states: layers * (seq_len, bs, hidden_size)
+        last_hidden = te_hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
+
+        if self.residual: # residual connection
+            last_hidden = fusion + last_hidden
+
+        lstm_hidden, (h, c) = self.net_lstm(last_hidden, states)
+        prediction, _ = self.net_reg(lstm_hidden)
         logits = None
         if self.cls_loss:
             logits = prediction.reshape(prediction.shape[:-1] + (22, 2)).transpose(1, 2) #[B, L, 44] -> [B, L, 22, 2] -> [B, 22, L, 2]
@@ -231,11 +198,10 @@ class TransformerDsUsModel(BaseModel):
                 weights = torch.FloatTensor(self.bin_centers[self.target_name]).reshape(1, 1, -1, 1).cuda()
                 prediction = prediction.unsqueeze(-1)
             prediction = F.softmax(prediction, dim=-2)
-            #weights = torch.FloatTensor([(-1.0 + i/10.0) for i in range(21)]).reshape(1, 1, -1, 1).cuda()
             prediction = torch.sum(prediction * weights, dim=-2)
-        return prediction, logits
-   
-
+        return prediction, (h, c), logits
+    
+    
     def backward_step(self, pred, target, mask, logits=None, cls_target=None):
         """Calculate the loss for back propagation"""
         mask = mask.unsqueeze(-1)  # -> [B, L, 1]
@@ -245,7 +211,7 @@ class TransformerDsUsModel(BaseModel):
             mask = mask.expand(mask.shape[0], mask.shape[1], 2)  # -> [B, L, 2]
 
         self.loss_reg = self.criterion_reg(pred, target, mask, logits, cls_target)
-        self.loss_reg.backward(retain_graph=False)  
+        self.loss_reg.backward(retain_graph=False)
         for model in self.model_names:
             torch.nn.utils.clip_grad_norm_(getattr(self, 'net'+model).parameters(), 5)
 
@@ -257,7 +223,7 @@ if __name__ == '__main__':
     from data import create_dataset, create_dataset_with_args
 
     class test:
-        feature_set = 'vggish'
+        feature_set = 'affectnet,vggish,wav2vec'
         max_seq_len = 100
         bidirection = False
         input_dim = calc_total_dim(list(map(lambda x: x.strip(), feature_set.split(',')))) #计算出拼接后向量的维度
@@ -296,11 +262,13 @@ if __name__ == '__main__':
         cls_loss = False
         cls_weighted = False
         loss_weights = 1
-        downsample_rate = 30
+        transformer_pretrained = True
+        pth_path = '/data2/hzp/ABAW_VA_2022/code/checkpoints/3-16/transformer_both_affectnet-vggish-wav2vec_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc/13_net_seq.pth'
+        residual = True
 
     
     opt = test()
-    net_a = TransformerDsUsModel(opt)
+    net_a = TransformerLstmModel(opt)
 
 
     dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
