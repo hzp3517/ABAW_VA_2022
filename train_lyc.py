@@ -236,7 +236,7 @@ if __name__ == '__main__':
     for target in target_set:
         logger.info('Best eval epoch %d found with ccc %f on %s' % (best_eval_epoch[target], best_eval_ccc[target], target))
         logger.info(opt.name)
-        result_save_path = os.path.join(opt.log_dir, opt.name, 'epoch-{}_preds.json'.format(best_eval_epoch[target]))
+        result_save_path = os.path.join(opt.log_dir, opt.name, '{}-epoch-{}_preds.json'.format(target, best_eval_epoch[target]))
         json.dump(best_eval_result[target], open(result_save_path, 'w'))
         best_epoch_list.append(best_eval_epoch[target])
         

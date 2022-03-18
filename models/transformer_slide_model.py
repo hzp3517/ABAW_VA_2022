@@ -7,10 +7,12 @@ import torch.nn.functional as F
 # from .networks.transformer import TransformerEncoder#
 
 import sys
-sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
+sys.path.append('/data2/hzp/ABAW_VA_2022/code')#
 from models.base_model import BaseModel#
 from models.networks.regressor import FcRegressor#
 from models.networks.transformer import TransformerEncoder#
+from models.loss import CCCLoss, MSELoss, MultipleLoss
+from utils.bins import get_center_and_bounds
 
 class TransformerSlideModel(BaseModel):
     @staticmethod
@@ -21,8 +23,17 @@ class TransformerSlideModel(BaseModel):
         parser.add_argument('--ffn_dim', default=1024, type=int, help='dimension of FFN layer of transformer encoder')
         parser.add_argument('--nhead', default=4, type=int, help='number of heads of transformer encoder')
         parser.add_argument('--dropout_rate', default=0.3, type=float, help='drop out rate of FC layers')
-        parser.add_argument('--target', default='arousal', type=str, help='one of [arousal, valence]')
-        parser.add_argument('--loss_type', type=str, default='mse', choices=['mse', 'l1', 'ccc'], help='use MSEloss or L1loss or CCCloss')
+        parser.add_argument('--target', default='arousal', type=str, choices=['valence', 'arousal', 'both'], help='one of [arousal, valence, both]')
+        parser.add_argument('--use_pe', action='store_true', help='whether to use position encoding')
+        parser.add_argument('--encoder_type', type=str, default='transformer', choices=['transformer'], help='whether to use position encoding')
+        parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
+                            choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
+                                     'batch_vccc', 'ce'])
+        parser.add_argument('--loss_weights', type=float, default=1, nargs='+')
+        parser.add_argument('--cls_loss', default=False, action='store_true', help='whether to cls and average as loss')
+        parser.add_argument('--cls_weighted', default=False, action='store_true', help='whether to use weighted cls')
+
+        parser.add_argument('--save_model', default=False, action='store_true', help='whether to save_model at each epoch')
         return parser
     
     
@@ -33,27 +44,44 @@ class TransformerSlideModel(BaseModel):
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
         super().__init__(opt, logger)
-        self.loss_names = ['MSE']
+        self.loss_names = ['reg']
         self.model_names = ['_seq', '_reg']
         self.pretrained_model = []
+        self.use_pe = opt.use_pe
+        self.encoder_type = opt.encoder_type
+        self.loss_type = opt.loss_type
         
         # net seq (already include a linear projection before the transformer encoder)
         if opt.hidden_size == -1:
             opt.hidden_size = min(opt.input_dim // 2, 512)
-        self.net_seq = TransformerEncoder(opt.input_dim, opt.num_layers, opt.nhead, \
-                                          dim_feedforward=opt.ffn_dim, affine=True, affine_dim=opt.hidden_size)
+        if 'ce' in opt.loss_type:
+            opt.cls_loss = True
+        
+        if self.encoder_type == 'transformer':
+            self.net_seq = TransformerEncoder(opt.input_dim, opt.num_layers, opt.nhead, \
+                                            dim_feedforward=opt.ffn_dim, affine=True, \
+                                            affine_dim=opt.hidden_size, use_pe=self.use_pe)
         
         # net regression
         layers = list(map(lambda x: int(x), opt.regress_layers.split(',')))
-        self.hidden_size = opt.hidden_size
-        self.net_reg = FcRegressor(opt.hidden_size, layers, 1, dropout=opt.dropout_rate)
-        # settings 
         self.target_name = opt.target
+        self.loss_type = opt.loss_type
+        self.cls_loss = opt.cls_loss
+
+        bin_centers, bin_bounds = get_center_and_bounds(opt.cls_weighted)
+        self.bin_centers = dict([(key, np.array(value)) for key, value in bin_centers.items()])
+        self.bin_bounds = dict([(key, np.array(value)) for key, value in bin_bounds.items()])
+
+        self.hidden_size = opt.hidden_size
+        output_dim = 22 if self.cls_loss else 1
+        if self.target_name == 'both':
+            output_dim *= 2
+
+        self.net_reg = FcRegressor(opt.hidden_size, layers, output_dim, dropout=opt.dropout_rate)
+        # settings 
         if self.isTrain:
-            if opt.loss_type == 'mse':
-                self.criterion_reg = torch.nn.MSELoss(reduction='sum')
-            else:
-                self.criterion_reg = torch.nn.L1Loss(reduction='sum')
+            if self.isTrain:
+                self.criterion_reg = MultipleLoss(reduction='mean', loss_names=opt.loss_type, weights=opt.loss_weights)
             
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             paremeters = [{'params': getattr(self, 'net'+net).parameters()} for net in self.model_names]
@@ -69,46 +97,72 @@ class TransformerSlideModel(BaseModel):
 
         """
         self.feature = input['feature'].to(self.device)
+        self.mask = input['mask'].to(self.device)
         if load_label:
-            self.mask = input['mask'].to(self.device)
-            self.target = input[self.target_name].to(self.device)
+            if self.target_name == 'both':
+                self.target = torch.stack([input['valence'], input['arousal']], dim=2).to(self.device)
+            else:
+                self.target = input[self.target_name].to(self.device)
+
+            if self.cls_loss:
+                if self.target_name == 'both':
+                    #[B, L, 2]
+                    self.cls_target = torch.stack([input['valence_cls'], input['arousal_cls']], dim=2).to(self.device)
+                else:
+                    self.cls_target = input[self.target_name].to(self.device)
 
     def run(self):
         """After feed a batch of samples, Run the model."""
-        prediction = self.forward_step(self.feature)
+        prediction, logits = self.forward_step(self.feature)
         # backward
         if self.isTrain:
             self.optimizer.zero_grad()
-            self.backward_step(prediction, self.target, self.mask)
+            cls_target = None if not self.cls_loss else self.cls_target
+            self.backward_step(prediction, self.target, self.mask, logits, cls_target)
             self.optimizer.step() 
         self.output = prediction.squeeze(-1)
         
     def forward_step(self, input):
-        out, hidden_states = self.net_seq(input) # hidden_states: layers * (seq_len, bs, ft_dim)
-        last_hidden = hidden_states[-1].transpose(0, 1) # (bs, seq_len, ft_dim)
+        out, hidden_states = self.net_seq(input) # hidden_states: layers * (seq_len, bs, hidden_size)
+        last_hidden = hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
         prediction, _ = self.net_reg(last_hidden)
-        return prediction
+        logits = None
+        if self.cls_loss:
+            logits = prediction.reshape(prediction.shape[:-1] + (22, 2)).transpose(1, 2) #[B, L, 44] -> [B, L, 22, 2] -> [B, 22, L, 2]
+            if self.target_name == 'both':
+                prediction = prediction.reshape(prediction.shape[:-1] + (22, 2))
+                weights = torch.cat([torch.FloatTensor(self.bin_centers['valence']),
+                                     torch.FloatTensor(self.bin_centers['arousal'])]).reshape(1, 1, -1, 2).cuda()
+            else:
+                weights = torch.FloatTensor(self.bin_centers[self.target_name]).reshape(1, 1, -1, 1).cuda()
+                prediction = prediction.unsqueeze(-1)
+            prediction = F.softmax(prediction, dim=-2)
+            #weights = torch.FloatTensor([(-1.0 + i/10.0) for i in range(21)]).reshape(1, 1, -1, 1).cuda()
+            prediction = torch.sum(prediction * weights, dim=-2)
+        return prediction, logits
    
-    def backward_step(self, pred, target, mask):
+    def backward_step(self, pred, target, mask, logits=None, cls_target=None):
         """Calculate the loss for back propagation"""
-        pred = pred.squeeze() * mask
-        target = target * mask
-        batch_size = target.size(0)
-        self.loss_MSE = self.criterion_reg(pred, target) / batch_size
-        self.loss_MSE.backward(retain_graph=False)    
+        mask = mask.unsqueeze(-1)  # -> [B, L, 1]
+        if self.target_name != 'both':
+            target = target.unsqueeze(-1)  # -> [B, L, 1]
+        else:
+            mask = mask.expand(mask.shape[0], mask.shape[1], 2)  # -> [B, L, 2]
+
+        self.loss_reg = self.criterion_reg(pred, target, mask, logits, cls_target)
+        self.loss_reg.backward(retain_graph=False)
         for model in self.model_names:
             torch.nn.utils.clip_grad_norm_(getattr(self, 'net'+model).parameters(), 5)
             
             
 if __name__ == '__main__':
     import sys
-    sys.path.append('/data8/hzp/ABAW_VA_2022/code/utils')#
+    sys.path.append('/data2/hzp/ABAW_VA_2022/code/utils')#
     from tools import calc_total_dim
     from data import create_dataset, create_dataset_with_args
 
     class test:
-        feature_set = 'vggish'
-        bidirection = False
+        feature_set = 'denseface'
         input_dim = calc_total_dim(list(map(lambda x: x.strip(), feature_set.split(',')))) #计算出拼接后向量的维度
         regress_layers = '256,128'
         lr = 1e-4
@@ -125,7 +179,7 @@ if __name__ == '__main__':
         name = ''
         cuda_benchmark = ''
         dropout_rate = 0.3
-        target = 'arousal'
+        target = 'both'
         loss_type = 'mse'
         dataset_mode = 'seq_slide'
         serial_batches = True
@@ -133,13 +187,18 @@ if __name__ == '__main__':
         max_dataset_size = float("inf")
         norm_method = ''
         norm_features = ''
-        win_len = 300
+        win_len = 250
         hop_len = 50
         
         hidden_size = 256
         num_layers = 4
         ffn_dim = 1024
         nhead = 4
+        use_pe = True
+        encoder_type = 'transformer'
+        cls_loss = False
+        cls_weighted = False
+        loss_weights = 1
 
     
     opt = test()
@@ -152,24 +211,24 @@ if __name__ == '__main__':
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         
-        # # # --train----
-        # for i, data in enumerate(dataset):  # inner loop within one epoch
-        #     total_iters += 1                # opt.batch_size
-        #     epoch_iter += opt.batch_size
-        #     net_a.set_input(data)           # unpack data from dataset and apply preprocessing
-        #     net_a.run()
-
-        #     print(net_a.output)
-        #     print(net_a.output.shape)
-        
-        
-        # --val---
-        for i, data in enumerate(val_dataset):  # inner loop within one epoch
+        # # --train----
+        for i, data in enumerate(dataset):  # inner loop within one epoch
+            total_iters += 1                # opt.batch_size
+            epoch_iter += opt.batch_size
             net_a.set_input(data)           # unpack data from dataset and apply preprocessing
-            net_a.isTrain = False
-            with torch.no_grad():
-                net_a.run()
+            net_a.run()
 
             print(net_a.output)
-            print(net_a.output.detach().cpu().squeeze(0).numpy())
             print(net_a.output.shape)
+        
+        
+        # # --val---
+        # for i, data in enumerate(val_dataset):  # inner loop within one epoch
+        #     net_a.set_input(data)           # unpack data from dataset and apply preprocessing
+        #     net_a.isTrain = False
+        #     with torch.no_grad():
+        #         net_a.run()
+
+        #     print(net_a.output)
+        #     print(net_a.output.detach().cpu().squeeze(0).numpy())
+        #     print(net_a.output.shape)

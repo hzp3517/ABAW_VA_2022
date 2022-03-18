@@ -12,8 +12,8 @@ nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/3-16
-checkpoints_dir=./checkpoints/3-16
+log_dir=./logs/3-17/openface
+checkpoints_dir=./checkpoints/3-17/openface
 
 target=$1
 feature=$2
@@ -31,7 +31,7 @@ cmd="python train_lyc_seed.py --dataset_mode=seq --model=transformer --gpu_ids=$
 --niter=10 --niter_decay=20
 --num_threads=0 --norm_features=$norm_features --norm_method=trn
 --name=$name --encoder_type=transformer
---suffix={target}_{feature_set}_bs{batch_size}_lr{lr}_dp{dropout_rate}_seq{max_seq_len}_reg-{regress_layers}_hidden{hidden_size}_layers{num_layers}_ffn{ffn_dim}_nhead{nhead}_{loss_type}"
+--suffix={target}_{feature_set}_bs{batch_size}_lr{lr}_dp{dropout_rate}_seq{max_seq_len}_reg-{regress_layers}_hidden{hidden_size}_layers{num_layers}_ffn{ffn_dim}_nhead{nhead}_{loss_type}_run{run_idx}"
 
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
@@ -41,3 +41,20 @@ echo $cmd | sh
 
 # bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec_TAPT compare 1 3
 # bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec compare 2 4
+
+
+# bash scripts/train_transformer_lyc.sh both wav2vec None 2 3
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT None 1 0
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT None 2 1
+
+
+# bash scripts/train_transformer_lyc.sh both affectnet None 1 2
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU None 1 2
+
+
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 1 0
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 2 0
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 3 0
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 1 1
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 2 1
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 3 1

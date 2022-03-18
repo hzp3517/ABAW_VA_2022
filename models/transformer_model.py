@@ -33,14 +33,9 @@ class TransformerModel(BaseModel):
         parser.add_argument('--ffn_dim', default=1024, type=int, help='dimension of FFN layer of transformer encoder')
         parser.add_argument('--nhead', default=4, type=int, help='number of heads of transformer encoder')
         parser.add_argument('--dropout_rate', default=0.3, type=float, help='drop out rate of FC layers')
-        parser.add_argument('--target', default='arousal', type=str, choices=['valence', 'arousal', 'both'], help='one of [arousal, valence]')
+        parser.add_argument('--target', default='arousal', type=str, choices=['valence', 'arousal', 'both'], help='one of [arousal, valence, both]')
         parser.add_argument('--use_pe', action='store_true', help='whether to use position encoding')
         parser.add_argument('--encoder_type', type=str, default='transformer', choices=['transformer', 'fft'], help='whether to use position encoding')
-
-        # parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
-        #                     choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
-        #                              'batch_vccc', 'ce'])
-        # parser.add_argument('--loss_weights', type=float, default=1, nargs='+')
         parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
                             choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
                                      'batch_vccc', 'ce'])
@@ -53,7 +48,7 @@ class TransformerModel(BaseModel):
         return parser
 
     def __init__(self, opt, logger=None):
-        """Initialize the LSTM autoencoder class
+        """Initialize the Transformer class
 
         Parameters:
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
@@ -208,7 +203,6 @@ if __name__ == '__main__':
     class test:
         feature_set = 'denseface'
         max_seq_len = 100
-        bidirection = False
         input_dim = calc_total_dim(list(map(lambda x: x.strip(), feature_set.split(',')))) #计算出拼接后向量的维度
         regress_layers = '256,128'
         lr = 1e-4
@@ -219,8 +213,6 @@ if __name__ == '__main__':
         epoch_count = 1
         niter=20
         niter_decay=30
-        niter_warmup=4
-        niter_total=70
         gpu_ids = 0
         isTrain = True
         checkpoints_dir = ''

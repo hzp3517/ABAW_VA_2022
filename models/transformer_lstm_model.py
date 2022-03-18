@@ -175,16 +175,17 @@ class TransformerLstmModel(BaseModel):
     
 
     def forward_step(self, input, states):
-        fusion = self.net_fc(input)
-
         if self.transformer_pretrained: # if use the pretrained transformer encoder, freeze that model.
             with torch.no_grad():
+                fusion = self.net_fc(input)
                 out, te_hidden_states = self.net_te(fusion) # te_hidden_states: layers * (seq_len, bs, hidden_size)
+        else:
+            fusion = self.net_fc(input)
+            out, te_hidden_states = self.net_te(fusion) # te_hidden_states: layers * (seq_len, bs, hidden_size)
         last_hidden = te_hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
-
-        if self.residual: # residual connection
+        if self.residual == 'y': # residual connection
             last_hidden = fusion + last_hidden
-
+            # print('res:', last_hidden)
         lstm_hidden, (h, c) = self.net_lstm(last_hidden, states)
         prediction, _ = self.net_reg(lstm_hidden)
         logits = None

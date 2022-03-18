@@ -10,6 +10,7 @@ from transformers import Wav2Vec2Processor
 import sys
 from tqdm import tqdm
 import fairseq
+import torch.nn.functional as F
 
 sys.path.append('/data2/hzp/ABAW_VA_2022/code/preprocess')
 from tools.base_worker import BaseWorker
@@ -18,7 +19,7 @@ class Wav2VecExtractor(object):
     ''' 抽取wav2vec特征, 输入音频路径, 输出npy数组, 每帧768d
     '''
     # def __init__(self, downsample=4, gpu=0, max_seg_len=60, use_asr_based_model=False):
-    def __init__(self, gpu=0, max_seg_len=120, use_asr_based_model=False):
+    def __init__(self, gpu=0, max_seg_len=20, use_asr_based_model=False):
         '''
         - max_set_len: 一次送入语音模型的最大语音长度 (s)，在语音长度较长的情况下，将原始的语音帧序列切成多个片段
                        为确保后续流程的准确性，这里应该设为2的倍数
@@ -41,7 +42,23 @@ class Wav2VecExtractor(object):
             self.model = self.model[0]
         self.model.eval()
         self.model.to(self.device)
-        
+    
+    @staticmethod
+    def get_feature(feats):
+        def postprocess(feats):
+            if feats.dim == 2:
+                feats = feats.mean(-1)
+
+            assert feats.dim() == 1, feats.dim()
+
+            with torch.no_grad():
+                feats = F.layer_norm(feats, feats.shape)
+            return feats
+
+        feats = torch.from_numpy(feats).float()
+        feats = postprocess(feats)
+        return feats.unsqueeze(0)
+
     @staticmethod
     def read_audio(self, wav_path):
         '''
@@ -67,8 +84,9 @@ class Wav2VecExtractor(object):
     def __call__(self, wav):
         speech_list, sr = Wav2VecExtractor.read_audio(self, wav)
         ft_list = []
-        for speech in tqdm(speech_list[:-1]):
-            input_values = self.processor(speech, return_tensors="pt", sampling_rate=sr).input_values.to(self.device)
+        for speech in speech_list[:-1]:
+            # input_values = self.processor(speech, return_tensors="pt", sampling_rate=sr).input_values.to(self.device)
+            input_values = Wav2VecExtractor.get_feature(speech).to(self.device)
             with torch.no_grad():
                 # ft = self.model(input_values).last_hidden_state
                 ft = self.model(input_values, features_only=True)
@@ -90,7 +108,8 @@ class Wav2VecExtractor(object):
 
         # 最后一个片段，在这里不强制对齐时间
         speech = speech_list[-1]
-        input_values = self.processor(speech, return_tensors="pt", sampling_rate=sr).input_values.to(self.device)
+        # input_values = self.processor(speech, return_tensors="pt", sampling_rate=sr).input_values.to(self.device)
+        input_values = Wav2VecExtractor.get_feature(speech).to(self.device)
         with torch.no_grad():
             # ft = self.model(input_values).last_hidden_state
             ft = self.model(input_values, features_only=True)

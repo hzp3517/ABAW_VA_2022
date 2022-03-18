@@ -9,7 +9,6 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
-import h5py
 from tqdm import tqdm
 
 import sys

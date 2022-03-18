@@ -33,7 +33,7 @@ cmd="python train_lyc_seed.py --dataset_mode=seq --model=transformer_dsus --gpu_
 --niter=10 --niter_decay=40
 --num_threads=0 --norm_features=$norm_features --norm_method=trn
 --name=$name --encoder_type=transformer
---suffix={target}_{feature_set}_dsus{downsample_rate}_bs{batch_size}_lr{lr}_dp{dropout_rate}_seq{max_seq_len}_reg-{regress_layers}_hidden{hidden_size}_layers{num_layers}_ffn{ffn_dim}_nhead{nhead}_{loss_type}"
+--suffix={target}_{feature_set}_dsus{downsample_rate}_bs{batch_size}_lr{lr}_dp{dropout_rate}_seq{max_seq_len}_reg-{regress_layers}_hidden{hidden_size}_layers{num_layers}_ffn{ffn_dim}_nhead{nhead}_{loss_type}_run{run_idx}"
 
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh

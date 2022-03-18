@@ -17,11 +17,11 @@ def mkdir(path):
     except FileExistsError:
         pass
 
-def get_wav2vec_ft(audio_root, video_id, num_frames, gpu_id, frame_rate=0.02):
+def get_wav2vec_ft(extractor, audio_root, video_id, num_frames, gpu_id, frame_rate=0.02):
     '''
     num_frames: 30Hz
     '''
-    wav2vec = Wav2VecExtractor(gpu=gpu_id) # 不做降采样，0.02s一帧特征
+    wav2vec = extractor # Wav2VecExtractor(gpu=gpu_id) # 不做降采样，0.02s一帧特征
     wav_path = os.path.join(audio_root, video_id + '.wav')
     origin_ft = wav2vec(wav_path) # (len, 130)
     origin_ft = np.array(origin_ft)
@@ -58,6 +58,7 @@ def get_wav2vec_ft(audio_root, video_id, num_frames, gpu_id, frame_rate=0.02):
 
 def make_wav2vec(target_dir, audio_root, save_dir, gpu_id):
     set_list = ['train', 'val']
+    extractor = Wav2VecExtractor(gpu=gpu_id)
     special_targets_path = os.path.join(target_dir, 'special_videos.h5')
     special_h5f = h5py.File(special_targets_path, 'r')
     for set_name in set_list:
@@ -75,12 +76,12 @@ def make_wav2vec(target_dir, audio_root, save_dir, gpu_id):
             
             if valid_h5f[new_video_id]['special'][()] == 0: # 没有被切
                 num_frames = valid_h5f[new_video_id]['length'][()]
-                video_ft = get_wav2vec_ft(audio_root, new_video_id, num_frames, gpu_id)
+                video_ft = get_wav2vec_ft(extractor, audio_root, new_video_id, num_frames, gpu_id)
                 video_group['fts'] = video_ft
             else: # 后切出来的片段
                 original_video = '_'.join(new_video_id.split('_')[:-1])
                 num_frames = original_h5f[original_video]['length'][()]
-                video_ft = get_wav2vec_ft(audio_root, original_video, num_frames, gpu_id)
+                video_ft = get_wav2vec_ft(extractor, audio_root, original_video, num_frames, gpu_id)
                 seg_start = special_h5f[original_video][new_video_id]['start'][()]
                 seg_end = special_h5f[original_video][new_video_id]['end'][()]
                 video_group['fts'] = video_ft[seg_start: seg_end + 1]

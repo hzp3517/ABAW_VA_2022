@@ -2,7 +2,7 @@ import os
 import numpy as np, argparse, time, pickle, random, json
 
 from opts.train_opts import TrainOptions
-from data import create_dataset, create_dataset_with_args
+from data import create_dataset, create_dataset_with_args, CustomDatasetDataLoader
 from models import create_model
 from utils.logger import get_logger
 from utils.path import make_path
@@ -18,7 +18,6 @@ from torch.utils.tensorboard import SummaryWriter
 import warnings
 warnings.filterwarnings("ignore")
 
-
 def seed_everything(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -33,40 +32,123 @@ def test(model, tst_iter):
     pass
 
 
+def get_avg_result(val_iter, seg_videoId_lst, total_pred, total_label):
+    '''
+    total_pred: (total_num_segs, win_len, reg_output)
+    total_label: (total_num_segs, win_len, reg_output)
+    '''
+    video_list = val_iter.dataset.video_list
+    video_len_list = val_iter.dataset.video_len_list
+    win_len = val_iter.dataset.win_len
+    hop_len = val_iter.dataset.hop_len
+
+    final_pred = []
+    final_label = []
+    all_video_dict = {}
+
+    cur_video = video_list[0]
+    video_pred = np.zeros(video_len_list[0])
+    video_label = np.zeros(video_len_list[0])
+    video_cnt_lst = np.zeros(video_len_list[0])
+    start = 0
+    end = win_len
+
+    idx = 0
+    video_cnt = 0
+    total_seg_num = len(seg_videoId_lst)
+    while idx < total_seg_num:
+        seg_videoId = seg_videoId_lst[idx]
+        pred = total_pred[idx]
+        label = total_label[idx]
+
+        # for seg_videoId, pred, label in zip(seg_videoId_lst, total_pred, total_label):
+        if seg_videoId == cur_video:
+            assert start < len(video_pred)
+            if end <= len(video_pred):
+                video_pred[start: end] = pred
+                video_label[start: end] = label
+                video_cnt_lst[start: end] = video_cnt_lst[start: end] + 1
+            else:
+                pad_num = end - len(video_pred)
+                video_pred[start:] = pred[:-pad_num]
+                video_label[start:] = label[:-pad_num]
+                video_cnt_lst[start:] = video_cnt_lst[start:] + 1
+            start += hop_len
+            end += hop_len
+            idx += 1
+        else:
+            # 把上一个视频处理好
+            assert np.all(video_cnt_lst)
+            video_pred = video_pred / video_cnt_lst
+            video_label = video_label / video_cnt_lst
+            video_dict = {'video_id': cur_video, 'pred': video_pred.tolist(), 'label': video_label.tolist()}
+            final_pred.append(video_pred)
+            final_label.append(video_label)
+            all_video_dict[cur_video] = video_dict
+
+            # 准备好处理下一个视频
+            cur_video = seg_videoId
+            video_cnt += 1
+            video_pred = np.zeros(video_len_list[video_cnt])
+            video_label = np.zeros(video_len_list[video_cnt])
+            video_cnt_lst = np.zeros(video_len_list[video_cnt])
+            start = 0
+            end = win_len
+
+    # 处理好最后一个视频
+    assert np.all(video_cnt_lst)
+    video_pred = video_pred / video_cnt_lst
+    video_label = video_label / video_cnt_lst
+    video_dict = {'video_id': cur_video, 'pred': video_pred.tolist(), 'label': video_label.tolist()}
+    final_pred.append(video_pred)
+    final_label.append(video_label)
+    all_video_dict[cur_video] = video_dict
+    
+    assert len(final_pred) == len(video_list)
+
+    return final_pred, final_label, all_video_dict
+
+
 def eval(model, val_iter, target='valence', smooth=False):  # target = valence, arousal
     model.eval()
+    # total_data = []
+    seg_videoId_lst = []
     total_pred = []
     total_label = []
 
-    results = {}
+    # results = {}
     for i, data in enumerate(val_iter):  # inner loop within one epoch
         model.set_input(data)  # unpack data from dataset and apply preprocessing
         model.test()
-        lengths = data['length'].numpy()
         if model.target_name == 'both':
-            pred = remove_padding(model.output[..., 0 if target == 'valence' else 1].detach().cpu().numpy(),
-                                  lengths)  # [size,
+            pred = model.output[..., 0 if target == 'valence' else 1].detach().cpu().numpy()
         else:
-            pred = remove_padding(model.output.detach().cpu().numpy(), lengths)  # [size,
-        label = remove_padding(data[target].numpy(), lengths)
-        total_pred += pred
-        total_label += label
-        for j, video_id in enumerate(data['video_id']):
-            results[video_id] = {'video_id': video_id,
-                                 'pred': pred[j].tolist(),
-                                 'label': label[j].tolist()}
+            pred = model.output.detach().cpu().squeeze(0).numpy()
+        label = data[target].numpy()
+
+        # total_data.append(data)
+        seg_videoId_lst += data['video_id']
+        total_pred.append(pred) # pred: (bs, win_len, reg_output)
+        total_label.append(label)
+    total_pred = np.concatenate(total_pred, axis=0) # total_pred: (total_num_segs, win_len, reg_output)
+    total_label = np.concatenate(total_label, axis=0) # total_pred: (total_num_segs, win_len, reg_output)
+
+    final_pred, final_label, final_results = get_avg_result(val_iter, seg_videoId_lst, total_pred, total_label)
+
+    final_pred = np.array(final_pred)
+    final_label = np.array(final_label)
 
     # calculate metrics
     best_window = None
     if smooth:
-        total_pred, best_window = smooth_func(total_pred, total_label, best_window=best_window, logger=logger)
+        final_pred, best_window = smooth_func(final_pred, final_label, best_window=best_window, logger=logger)
 
-    total_pred = scratch_data(total_pred)
-    total_label = scratch_data(total_label)
-    mse, rmse, pcc, ccc = evaluate_regression(total_label, total_pred)
+    final_pred = scratch_data(final_pred)
+    final_label = scratch_data(final_label)
+    mse, rmse, pcc, ccc = evaluate_regression(final_label, final_pred)
     model.train()
 
-    return mse, rmse, pcc, ccc, best_window, results
+    return mse, rmse, pcc, ccc, best_window, final_results
 
 
 def clean_chekpoints(checkpoints_dir, expr_name, store_epoch_list):
@@ -80,6 +162,7 @@ def clean_chekpoints(checkpoints_dir, expr_name, store_epoch_list):
                 break
         if not isStoreEpoch and checkpoint.endswith('pth'):
             os.remove(os.path.join(root, checkpoint))
+
 
 
 if __name__ == '__main__':
@@ -96,7 +179,7 @@ if __name__ == '__main__':
     logger = get_logger(logger_path, suffix)            # get logger
     logger.info('Using seed: {}'.format(seed))
 
-    dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
+    dataset, val_dataset, train_eval_dataset = create_dataset_with_args(opt, set_name=['train', 'val', 'train_eval'])  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)  # get the number of images in the dataset.
     logger.info('The number of training samples = %d' % dataset_size)
     # calculate input dims
@@ -134,7 +217,7 @@ if __name__ == '__main__':
         best_eval_epoch[target] = -1
         best_eval_window[target] = None
         best_eval_result[target] = None
-    
+
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):  # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()  # timer for data loading per iteration
@@ -194,7 +277,7 @@ if __name__ == '__main__':
 
         # eval train set
         for target in target_set:
-            mse, rmse, pcc, ccc, window, _ = eval(model, dataset, target=target)
+            mse, rmse, pcc, ccc, window, _ = eval(model, train_eval_dataset, target=target)
             logger.info('Train result on %s of epoch %d / %d mse %.4f rmse %.4f pcc %.4f ccc %.4f' % (target, epoch, opt.niter + opt.niter_decay, mse, rmse, pcc, ccc))
 
             # eval val set
@@ -207,30 +290,6 @@ if __name__ == '__main__':
                 best_eval_ccc[target] = ccc
                 best_eval_window[target] = window
                 best_eval_result[target] = preds
-
-
-
-            # if best_ccc.get(target) is None or best_ccc[target] < ccc:
-            #     best_ccc[target] = ccc
-            #     if not os.path.exists(os.path.join(opt.checkpoints_dir, opt.name, 'seed_' + str(seed))):
-            #         os.makedirs(os.path.join(opt.checkpoints_dir, opt.name, 'seed_' + str(seed)))
-            #     if opt.save_model:  # cache our model every <save_epoch_freq> epochs
-            #         logger.info('saving the model of best %s at the end of epoch %d, iters %d' % (target, epoch, total_iters))
-            #         # model.save_networks('latest')
-            #         model.save_networks(os.path.join('seed_' + str(seed), 'best_' + target))
-
-            #         pred_save_path = os.path.join(opt.checkpoints_dir, opt.name, 'seed_{}'.format(seed), 'best_pred_{}.json'.format(target))
-            #         json.dump(preds, open(pred_save_path, 'w'))
-
-    # print best eval result
-    # if opt.target == 'both':
-    #     target_set.append('average')
-    #     metrics['average'] = [[(a + b) / 2 for a, b in zip(x, y)] for x, y in
-    #                           zip(metrics['arousal'], metrics['valence'])]
-
-    # result_path = os.path.join(logger_path, 'result.txt')
-    # with open(result_path, 'a') as f:
-        # f.write('Using Seed: {}\n'.format(seed))
     
     best_epoch_list = []
     for target in target_set:
