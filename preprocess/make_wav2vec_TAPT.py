@@ -56,16 +56,16 @@ def get_wav2vec_ft(extractor, audio_root, video_id, num_frames, gpu_id, frame_ra
     return video_ft
 
 
-def make_wav2vec(target_dir, audio_root, save_dir, gpu_id):
+def make_wav2vec(ckpt_path, save_name, target_dir, audio_root, save_dir, gpu_id):
     set_list = ['train', 'val']
-    extractor = Wav2VecExtractor(gpu=gpu_id)
+    extractor = Wav2VecExtractor(ckpt_path, gpu=gpu_id)
     special_targets_path = os.path.join(target_dir, 'special_videos.h5')
     special_h5f = h5py.File(special_targets_path, 'r')
     for set_name in set_list:
         print('--------------process {}--------------'.format(set_name))
         original_targets_path = os.path.join(target_dir, '{}_original_all_targets.h5'.format(set_name))
         valid_targets_path = os.path.join(target_dir, '{}_valid_targets.h5'.format(set_name))
-        ft_path = os.path.join(save_dir, '{}_wav2vec_TAPT.h5'.format(set_name))
+        ft_path = os.path.join(save_dir, '{}_{}.h5'.format(set_name, save_name))
         original_h5f = h5py.File(original_targets_path, 'r')
         valid_h5f = h5py.File(valid_targets_path, 'r')
         ft_h5f = h5py.File(ft_path, 'w')
@@ -94,4 +94,17 @@ if __name__ == '__main__':
     save_dir = '/data2/hzp/ABAW_VA_2022/processed_data/features/'
     mkdir(save_dir)
     print('making Wav2Vec')
-    make_wav2vec(target_dir, audio_root, save_dir, gpu_id=0)
+    ckpt_paths = [
+        '/data2/hzp/ABAW_VA_2022/code/preprocess/tools/wav2vec_ckpt/checkpoint10.pt',
+        '/data2/hzp/ABAW_VA_2022/code/preprocess/tools/wav2vec_ckpt/checkpoint13.pt',
+        '/data2/hzp/ABAW_VA_2022/code/preprocess/tools/wav2vec_ckpt/checkpoint15.pt',
+        '/data2/hzp/ABAW_VA_2022/code/preprocess/tools/wav2vec_ckpt/checkpoint17.pt',
+    ]
+    save_names = [
+        'wav2vec_TAPT_e10',
+        'wav2vec_TAPT_e13',
+        'wav2vec_TAPT_e15',
+        'wav2vec_TAPT_e17',
+    ]
+    for ckpt_path, save_name in zip(ckpt_paths, save_names):
+        make_wav2vec(ckpt_path, save_name, target_dir, audio_root, save_dir, gpu_id=0)

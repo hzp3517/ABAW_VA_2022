@@ -16,6 +16,7 @@ class ComParEExtractor(object):
         if opensmile_tool_dir is None:
             #opensmile_tool_dir = '/root/opensmile-2.3.0/'
             opensmile_tool_dir = '/data8/hzp/emo_bert/tools/opensmile-2.3.0'
+            # opensmile_tool_dir = '/data2/hzp/tools/opensmile-2.3.0'
         self.opensmile_tool_dir = opensmile_tool_dir
         self.tmp_dir = tmp_dir
         self.downsample = downsample
@@ -46,6 +47,6 @@ if __name__ == '__main__':
     downsample = -1 # compare特征的step是10ms
     no_tmp = True
     compare = ComParEExtractor(downsample=downsample, no_tmp=no_tmp)
-    wav_path = '/data9/hzp/ABAW_VA_2022/processed_data/audios/1-30-1280x720.wav' # 5分45秒
+    wav_path = '/data2/hzp/ABAW_VA_2022/processed_data/audios/1-30-1280x720.wav' # 5分45秒
     wav_data = compare(wav_path)
     print(wav_data.shape) # (34517, 130)，0.01s一帧

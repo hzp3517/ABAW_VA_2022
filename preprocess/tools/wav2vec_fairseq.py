@@ -19,7 +19,7 @@ class Wav2VecExtractor(object):
     ''' 抽取wav2vec特征, 输入音频路径, 输出npy数组, 每帧768d
     '''
     # def __init__(self, downsample=4, gpu=0, max_seg_len=60, use_asr_based_model=False):
-    def __init__(self, gpu=0, max_seg_len=20, use_asr_based_model=False):
+    def __init__(self, ckpt_path, gpu=0, max_seg_len=20, use_asr_based_model=False):
         '''
         - max_set_len: 一次送入语音模型的最大语音长度 (s)，在语音长度较长的情况下，将原始的语音帧序列切成多个片段
                        为确保后续流程的准确性，这里应该设为2的倍数
@@ -27,7 +27,8 @@ class Wav2VecExtractor(object):
         # self.downsample = downsample
         self.device = torch.device('cuda:{}'.format(gpu))
         self.max_seg_len = max_seg_len
-        ckpt_path = '/data2/hzp/ABAW_VA_2022/code/preprocess/tools/wav2vec_ckpt/checkpoint_20_120000.pt'
+        # ckpt_path = '/data2/hzp/ABAW_VA_2022/code/preprocess/tools/wav2vec_ckpt/checkpoint_20_120000.pt'
+        print('Load model from', ckpt_path)
         if use_asr_based_model:
             print('[INFO] use asr based model')
             self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")

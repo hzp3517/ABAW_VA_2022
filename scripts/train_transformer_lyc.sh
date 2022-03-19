@@ -12,8 +12,8 @@ nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/3-17/openface
-checkpoints_dir=./checkpoints/3-17/openface
+log_dir=./logs/3-17/wav2vec
+checkpoints_dir=./checkpoints/3-17/wav2vec
 
 target=$1
 feature=$2
@@ -48,13 +48,18 @@ echo $cmd | sh
 # bash scripts/train_transformer_lyc.sh both wav2vec_TAPT None 2 1
 
 
-# bash scripts/train_transformer_lyc.sh both affectnet None 1 2
-# bash scripts/train_transformer_lyc.sh both affectnet,FAU None 1 2
+
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e10 None 1 0
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e10 None 2 0
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e10 None 3 0
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e13 None 1 0
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e13 None 2 0
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e13 None 3 0
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e15 None 1 1
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e15 None 2 1
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e15 None 3 1
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e17 None 1 1
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e17 None 2 1
+# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e17 None 3 1
 
 
-# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 1 0
-# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 2 0
-# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 3 0
-# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 1 1
-# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 2 1
-# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 3 1

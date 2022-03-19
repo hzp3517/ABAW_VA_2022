@@ -59,7 +59,7 @@ class Wav2VecExtractor(object):
     def __call__(self, wav):
         speech_list, sr = Wav2VecExtractor.read_audio(self, wav)
         ft_list = []
-        for speech in tqdm(speech_list[:-1]):
+        for speech in speech_list[:-1]:
             input_values = self.processor(speech, return_tensors="pt", sampling_rate=sr).input_values.to(self.device)
             with torch.no_grad():
                 ft = self.model(input_values).last_hidden_state

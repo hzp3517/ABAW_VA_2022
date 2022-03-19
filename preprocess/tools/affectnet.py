@@ -13,14 +13,16 @@ from torchvision import transforms
 import torchvision.transforms
 import pickle
 
-sys.path.append('/data8/hzp/ABAW_VA_2022/code/preprocess')
+sys.path.append('/data2/hzp/ABAW_VA_2022/code/preprocess')
 from tools.base_worker import BaseWorker
 from tools.denseface.model.dense_net import DenseNet
 
 class AffectnetExtractor(BaseWorker):
     def __init__(self, gpu_id=0):
         self.device = torch.device("cuda:{}".format(gpu_id))
-        model_path = '/data9/datasets/AffectNetDataset/combine_with_fer/results/densenet100_adam0.0002_0.0/ckpts/model_step_12.pt'
+        # model_path = '/data9/datasets/AffectNetDataset/combine_with_fer/results/densenet100_adam0.0002_0.0/ckpts/model_step_12.pt'
+        model_path = '/data2/hzp/pretrained_models/for_testset_extract/affectnet_model_step_12.pt'
+
         self.mean = 101.63449 # 在VA任务的训练集上计算得到
         self.std = 59.74126
         self.model = DenseNet(gpu_id=gpu_id).to(self.device)
