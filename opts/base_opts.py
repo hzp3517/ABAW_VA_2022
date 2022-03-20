@@ -27,14 +27,14 @@ class BaseOptions():
         parser.add_argument('--log_dir', type=str, default='./logs', help='logs are saved here')
         parser.add_argument('--cuda_benchmark', action='store_true', help='use torch cudnn benchmark')
         # model parameters
-        parser.add_argument('--model', type=str, default='autoencoder', help='chooses which model to use. [autoencoder | siamese | emotion_A]')
+        parser.add_argument('--model', type=str, default='None', help='chooses which model to use. [autoencoder | siamese | emotion_A]')
         parser.add_argument('--norm', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
         parser.add_argument('--init_type', type=str, default='normal', help='network initialization [normal | xavier | kaiming | orthogonal]')
         parser.add_argument('--init_gain', type=float, default=0.02, help='scaling factor for normal, xavier and orthogonal.')
         parser.add_argument('--no_dropout', action='store_true', help='no dropout for the generator')
         
         # dataset parameters
-        parser.add_argument('--dataset_mode', type=str, default='muse_wild', help='chooses how datasets are loaded. [iemocap, ami, mix]')
+        parser.add_argument('--dataset_mode', type=str, default='None', help='chooses how datasets are loaded. [iemocap, ami, mix]')
         parser.add_argument('--num_threads', default=0, type=int, help='# threads for loading data')
         parser.add_argument('--batch_size', type=int, default=256, help='input batch size')
         parser.add_argument('--serial_batches', action='store_true', help='if true, takes images in order to make batches, otherwise takes them randomly')

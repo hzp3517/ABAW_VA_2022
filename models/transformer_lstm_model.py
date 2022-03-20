@@ -149,7 +149,7 @@ class TransformerLstmModel(BaseModel):
 
     def run(self):
         """After feed a batch of samples, Run the model."""
-        batch_size = self.target.size(0)
+        batch_size = self.feature.size(0)
         batch_max_length = torch.max(self.length).item()
         # calc num of splited segments
         split_seg_num = batch_max_length // self.max_seq_len + int(batch_max_length % self.max_seq_len != 0)
@@ -240,7 +240,8 @@ if __name__ == '__main__':
         niter_warmup=4
         niter_total=70
         gpu_ids = 0
-        isTrain = True
+        # isTrain = True
+        isTrain = False
         checkpoints_dir = ''
         name = ''
         cuda_benchmark = ''
@@ -272,15 +273,28 @@ if __name__ == '__main__':
     net_a = TransformerLstmModel(opt)
 
 
-    dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
+    # dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
+    test_dataset = create_dataset_with_args(opt, set_name=['test'])[0]  # create a dataset given opt.dataset_mode and other options
+
+    # total_iters = 0                             # the total number of training iterations
+    # for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+    #     epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
+    #     for i, data in enumerate(dataset):  # inner loop within one epoch
+    #         total_iters += 1                # opt.batch_size
+    #         epoch_iter += opt.batch_size
+    #         net_a.set_input(data)           # unpack data from dataset and apply preprocessing
+    #         net_a.run()
+
+    #         print(net_a.output)
+    #         print(net_a.output.shape)
 
     total_iters = 0                             # the total number of training iterations
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
-        for i, data in enumerate(dataset):  # inner loop within one epoch
+        for i, data in enumerate(test_dataset):  # inner loop within one epoch
             total_iters += 1                # opt.batch_size
             epoch_iter += opt.batch_size
-            net_a.set_input(data)           # unpack data from dataset and apply preprocessing
+            net_a.set_input(data, load_label=False)           # unpack data from dataset and apply preprocessing
             net_a.run()
 
             print(net_a.output)

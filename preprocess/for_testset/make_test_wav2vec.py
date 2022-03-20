@@ -14,11 +14,7 @@ import sys
 sys.path.append('/data2/hzp/ABAW_VA_2022/code/preprocess')
 from tools.wav2vec import Wav2VecExtractor
 
-
-set_name = 'pseudo_test' # 注意改过来！！！
-# set_name = 'test'
-
-
+set_name = 'test'
 
 def mkdir(path):
     try:

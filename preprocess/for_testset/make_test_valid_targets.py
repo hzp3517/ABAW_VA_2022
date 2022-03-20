@@ -12,14 +12,7 @@ import h5py
 import numpy as np
 import glob
 from tqdm import tqdm
-
-
-origin_set_name = 'Pseudo_Test_Set' #注意确认名称！！！
-set_name = 'pseudo_test'
-# origin_set_name = 'Test_Set' #注意确认名称！！！
-# set_name = 'test'
-
-
+import ffmpeg
 
 def mkdir(path):
     try:
@@ -33,50 +26,66 @@ def get_basename(path):
         basename = basename[:basename.rfind('.')]
     return basename
 
-dataset_root = '/data2/hzp/Aff-Wild2/'
+def get_nb_frames(video_path):
+    info = ffmpeg.probe(video_path)
+    info_dict = next(c for c in info['streams'] if c['codec_type'] == 'video')
+    return int(info_dict['nb_frames']) + 1 # 经过验证，发现官方给的帧数总是比检测到的数目多1
+
+test_label_file = '/data2/hzp/Aff-Wild2/Test_Set_Release_and_Submission_Instructions/Valence_Arousal_Estimation_Challenge_test_set_release.txt'
+set_name = 'test'
+
+# dataset_root = '/data2/hzp/Aff-Wild2/'
+video_dir = '/data2/hzp/Aff-Wild2/videos/'
 save_dir = '/data2/hzp/ABAW_VA_2022/processed_data/targets'
 mkdir(save_dir)
 
+with open(test_label_file, 'r') as f:
+    context = f.readlines()
+test_video_list = [i.strip() for i in context]
+
+# 所有需要分成两个视频的数据（包括训练、验证和测试集）
+special_videos = {}
+special_videos['10-60-1280x720'] = ['10-60-1280x720', '10-60-1280x720_right']
+special_videos['video59'] = ['video59', 'video59_right']
+special_videos['video2'] = ['video2', 'video2_left']
+special_videos['30-30-1920x1080'] = ['30-30-1920x1080_left', '30-30-1920x1080_right']
+special_videos['46-30-484x360'] = ['46-30-484x360_left', '46-30-484x360_right']
+special_videos['52-30-1280x720'] = ['52-30-1280x720_left', '52-30-1280x720_right']
+special_videos['135-24-1920x1080'] = ['135-24-1920x1080_left', '135-24-1920x1080_right']
+special_videos['video55'] = ['video55_left', 'video55_right']
+special_videos['video74'] = ['video74_left', 'video74_right']
+special_videos['130-25-1280x720'] = ['130-25-1280x720_left', '130-25-1280x720_right']
+special_videos['49-30-1280x720'] = ['49-30-1280x720_left', '49-30-1280x720_right']
+special_videos['6-30-1920x1080'] = ['6-30-1920x1080_left', '6-30-1920x1080_right']
+special_videos['video10_1'] = ['video10_1_left', 'video10_1_right']
+special_videos['video29'] = ['video29_left', 'video29_right']
+special_videos['video49'] = ['video49_left', 'video49_right']
+special_videos['video5'] = ['video5_left', 'video5_right']
+
+reverse_dict = {}
+for key in special_videos.keys():
+    for value in special_videos[key]:
+        reverse_dict[value] = key
+    
 valid_targets_path = os.path.join(save_dir, '{}_valid_targets.h5'.format(set_name))
 valid_targets_h5f = h5py.File(valid_targets_path, 'w')
 
-origin_label_dir = os.path.join(dataset_root, 'Third_ABAW_Annotations/VA_Estimation_Challenge', origin_set_name)
-txt_file_list = glob.glob(os.path.join(origin_label_dir, '*.txt'))
-txt_file_list = sorted(txt_file_list)
-
-for txt_file in tqdm(txt_file_list):
-    video_id = get_basename(txt_file)
-    video_group = valid_targets_h5f.create_group(video_id)
-
-    # valence_list = []
-    # arousal_list = []
-    # valid_list = []
-
-    with open(txt_file, 'r') as f:
-        context = f.readlines()
-    context = context[1:] # 去除首行
-    label_list = [i.strip() for i in context]
-
-    # for lb in label_list:
-    #     valence_value = float(lb.split(',')[0])
-    #     arousal_value = float(lb.split(',')[1])
-    #     valence_list.append(valence_value)
-    #     arousal_list.append(arousal_value)
-
-    #     # check 发现没有这样的数据。
-    #     if (valence_value==-5 and arousal_value!=-5) or (valence_value!=-5 and arousal_value==-5):
-    #         print('notice!!!')
-
-    #     if valence_value==-5:
-    #         valid_list.append(0)
-    #     else:
-    #         valid_list.append(1)
-
-    # video_group['valence'] = np.array(valence_list, dtype=np.float32)
-    # video_group['arousal'] = np.array(arousal_list, dtype=np.float32)
-    # video_group['valid'] = np.array(valid_list, dtype=np.int32)
-
-    video_group['special'] = np.zeros(len(label_list)).astype(np.int)
-    video_group['length'] = len(label_list)
-
-    # assert len(label_list) == len(video_group['valence']) == len(video_group['arousal']) == len(video_group['valid'])
+for video in tqdm(test_video_list):
+    video_group = valid_targets_h5f.create_group(video)
+    if video in reverse_dict.keys():
+        corr_video = reverse_dict[video]
+        video_path = os.path.join(video_dir, corr_video + '.mp4')
+        if not os.path.exists(video_path):
+            video_path = os.path.join(video_dir, corr_video + '.avi')
+        assert os.path.exists(video_path)
+        nb_frames = get_nb_frames(video_path)
+        video_group['special'] = np.zeros(nb_frames).astype(np.int32)
+        video_group['length'] = nb_frames
+    else:
+        video_path = os.path.join(video_dir, video + '.mp4')
+        if not os.path.exists(video_path):
+            video_path = os.path.join(video_dir, video + '.avi')
+        assert os.path.exists(video_path)
+        nb_frames = get_nb_frames(video_path)
+        video_group['special'] = np.zeros(nb_frames).astype(np.int32)
+        video_group['length'] = nb_frames

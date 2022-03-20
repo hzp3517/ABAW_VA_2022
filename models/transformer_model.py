@@ -133,7 +133,7 @@ class TransformerModel(BaseModel):
 
     def run(self):
         """After feed a batch of samples, Run the model."""
-        batch_size = self.target.size(0)
+        batch_size = self.feature.size(0)
         batch_max_length = torch.max(self.length).item()
         # calc num of splited segments
         split_seg_num = batch_max_length // self.max_seq_len + int(batch_max_length % self.max_seq_len != 0)

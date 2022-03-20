@@ -12,10 +12,7 @@ import sys
 sys.path.append('/data2/hzp/ABAW_VA_2022/code/preprocess')
 from tools.vggish import VggishExtractor
 
-set_name = 'pseudo_test' # 注意改过来！！！
-# set_name = 'test'
-
-
+set_name = 'test'
 
 def mkdir(path):
     try:

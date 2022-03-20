@@ -17,13 +17,7 @@ import glob
 from tqdm import tqdm
 import cv2
 
-
-origin_set_name = 'Pseudo_Test_Set' #注意确认名称！！！
-set_name = 'pseudo_test'
-# origin_set_name = 'Test_Set' #注意确认名称！！！
-# set_name = 'test'
-
-
+set_name = 'test'
 
 dataset_root = '/data2/hzp/Aff-Wild2/'
 features_dir = '/data2/hzp/ABAW_VA_2022/processed_data/features'

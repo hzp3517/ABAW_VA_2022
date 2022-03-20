@@ -19,10 +19,7 @@ sys.path.append('/data2/hzp/ABAW_VA_2022/code/preprocess')
 from tools.affectnet import AffectnetExtractor
 
 gpu_id = 1
-set_name = 'pseudo_test' # 注意改过来！！！
-# set_name = 'test'
-
-
+set_name = 'test'
 
 features_dir = '/data2/hzp/ABAW_VA_2022/processed_data/features'
 # set_list = ['train', 'val']

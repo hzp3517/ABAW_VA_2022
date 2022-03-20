@@ -2,7 +2,7 @@
 得到compare特征
 
 策略：
-compare特征是0.01s一帧，标签频率是0.0333s一帧，所以第一个标签对应4个原始的compare特征（0.00~0.04s）取平均后的值
+egemaps特征是0.01s一帧，标签频率是0.0333s一帧，所以第一个标签对应4个原始的egemaps特征（0.00~0.04s）取平均后的值
 '''
 
 import numpy as np
@@ -13,7 +13,7 @@ import math
 
 import sys
 sys.path.append('/data8/hzp/ABAW_VA_2022/code/preprocess')
-from tools.compare import ComParEExtractor
+from tools.egemaps import EgemapsExtractor
 
 set_name = 'test'
 
@@ -23,13 +23,13 @@ def mkdir(path):
     except FileExistsError:
         pass
 
-def get_compare_ft(extractor, audio_root, video_id, num_frames, frame_rate=0.01):
+def get_egemaps_ft(extractor, audio_root, video_id, num_frames, frame_rate=0.01):
     '''
     num_frames: 30Hz
     '''
-    compare = extractor # compare = ComParEExtractor(downsample=-1) # 不做降采样，0.01s一帧特征
+    egemaps = extractor # compare = EgemapsExtractor(downsample=-1) # 不做降采样，0.01s一帧特征
     wav_path = os.path.join(audio_root, video_id + '.wav')
-    origin_ft = compare(wav_path) # (len, 130)
+    origin_ft = egemaps(wav_path) # (len, 23)
     origin_ft = np.array(origin_ft)
     
     start_time_list = [i * (1.0/30) for i in range(num_frames)]
@@ -62,8 +62,8 @@ def get_compare_ft(extractor, audio_root, video_id, num_frames, frame_rate=0.01)
     return video_ft
 
 
-def make_compare(target_dir, audio_root, save_dir):
-    extractor = ComParEExtractor(downsample=-1) # 不做降采样，0.01s一帧特征
+def make_egemaps(target_dir, audio_root, save_dir):
+    extractor = EgemapsExtractor(downsample=-1) # 不做降采样，0.01s一帧特征
 
     # set_list = ['train', 'val']
     # special_targets_path = os.path.join(target_dir, 'special_videos.h5')
@@ -72,7 +72,7 @@ def make_compare(target_dir, audio_root, save_dir):
 
     # original_targets_path = os.path.join(target_dir, '{}_original_all_targets.h5'.format(set_name))
     valid_targets_path = os.path.join(target_dir, '{}_valid_targets.h5'.format(set_name))
-    ft_path = os.path.join(save_dir, '{}_compare.h5'.format(set_name))
+    ft_path = os.path.join(save_dir, '{}_egemaps.h5'.format(set_name))
     # original_h5f = h5py.File(original_targets_path, 'r')
     valid_h5f = h5py.File(valid_targets_path, 'r')
     ft_h5f = h5py.File(ft_path, 'w')
@@ -83,12 +83,12 @@ def make_compare(target_dir, audio_root, save_dir):
         
         # if valid_h5f[new_video_id]['special'][()] == 0: # 没有被切
         num_frames = valid_h5f[new_video_id]['length'][()]
-        video_ft = get_compare_ft(extractor, audio_root, new_video_id, num_frames)
+        video_ft = get_egemaps_ft(extractor, audio_root, new_video_id, num_frames)
         video_group['fts'] = video_ft
         # else: # 后切出来的片段
         #     original_video = '_'.join(new_video_id.split('_')[:-1])
         #     num_frames = original_h5f[original_video]['length'][()]
-        #     video_ft = get_compare_ft(extractor, audio_root, original_video, num_frames)
+        #     video_ft = get_egemaps_ft(extractor, audio_root, original_video, num_frames)
         #     seg_start = special_h5f[original_video][new_video_id]['start'][()]
         #     seg_end = special_h5f[original_video][new_video_id]['end'][()]
         #     video_group['fts'] = video_ft[seg_start: seg_end + 1]
@@ -100,5 +100,5 @@ if __name__ == '__main__':
     target_dir = '/data9/hzp/ABAW_VA_2022/processed_data/targets/'
     save_dir = '/data9/hzp/ABAW_VA_2022/processed_data/features/'
     mkdir(save_dir)
-    print('making ComParE')
-    make_compare(target_dir, audio_root, save_dir)
+    print('making eGeMAPS')
+    make_egemaps(target_dir, audio_root, save_dir)

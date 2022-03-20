@@ -18,5 +18,8 @@ class TestOptions(BaseOptions):
         # for lyc model
         parser.add_argument('--prefix_list', type=str, default='None', help='pth file name befor _net_xxx.pth')
         parser.add_argument('--test_target', type=str, default='None', help='arousal, valence')
+
+        # for slide model
+        
         self.isTrain = False
         return parser
