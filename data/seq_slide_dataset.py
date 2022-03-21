@@ -33,7 +33,7 @@ class SeqSlideDataset(BaseDataset):
         ''' MuseWild dataset
         Parameter:
         --------------------------------------
-        set_name: [train, val, test]
+        set_name: [train, val, test, train_eval]
         '''
         super().__init__(opt)
         self.root = '/data2/hzp/ABAW_VA_2022/processed_data/'

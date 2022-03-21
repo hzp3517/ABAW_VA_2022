@@ -49,17 +49,9 @@ echo $cmd | sh
 
 
 
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e10 None 1 0
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e10 None 2 0
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e10 None 3 0
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e13 None 1 0
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e13 None 2 0
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e13 None 3 0
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e15 None 1 1
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e15 None 2 1
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e15 None 3 1
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e17 None 1 1
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e17 None 2 1
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT_e17 None 3 1
+# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT_e10 None 1 4
+# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT_e10 None 2 4
+# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT_e10 None 3 4
+
 
 

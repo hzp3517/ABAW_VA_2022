@@ -75,7 +75,6 @@ def load_networks_folder_with_prefix(model, folder_path, prefix):
     return model
 
 
-
 def load_model_from_checkpoint(opt_config, cpkt_dir, prefix):
     model = create_model(opt_config)
     model = load_networks_folder_with_prefix(model, cpkt_dir, prefix)
@@ -96,20 +95,8 @@ def load_dim(trn_opt):
         setattr(trn_opt, "v_dim", v_dim)                # set v_dim attribute to opt
     if hasattr(trn_opt, "l_features"):
         l_dim = calc_total_dim(list(map(lambda x: x.strip(), trn_opt.l_features.split(','))))
-        setattr(trn_opt, "l_dim", l_dim)                # set l_dim attribute to opt
+        setattr(trn_opt, "l_dim", l_dim)    
 
-
-# def process_preds(ori_pred):
-#     pred = []
-#     for i in ori_pred:
-#         if i > 1:
-#             pred.append(1)
-#         elif i < -1:
-#             pred.append(-1)
-#         else:
-#             pred.append(i)
-#     pred = np.array(pred)
-#     return pred
 
 def process_preds(ori_pred):
     pred = ori_pred.copy()
@@ -158,6 +145,96 @@ def smooth_prediction(pred, window, mean_or_binomial=True):
     return smoothed_pred
 
 
+def get_avg_result(data_iter, seg_videoId_lst, total_pred, total_label=None):
+    '''
+    total_pred: (total_num_segs, win_len, reg_output)
+    total_label: (total_num_segs, win_len, reg_output)
+    '''
+    video_list = data_iter.dataset.video_list
+    video_len_list = data_iter.dataset.video_len_list
+    win_len = data_iter.dataset.win_len
+    hop_len = data_iter.dataset.hop_len
+
+    final_pred = []
+    final_label = []
+    all_video_dict = {}
+
+    cur_video = video_list[0]
+    video_pred = np.zeros(video_len_list[0])
+    if total_label:
+        video_label = np.zeros(video_len_list[0])
+    video_cnt_lst = np.zeros(video_len_list[0])
+    start = 0
+    end = win_len
+
+    idx = 0
+    video_cnt = 0
+    total_seg_num = len(seg_videoId_lst)
+    while idx < total_seg_num:
+        seg_videoId = seg_videoId_lst[idx]
+        pred = total_pred[idx]
+        if total_label:
+            label = total_label[idx]
+
+        # for seg_videoId, pred, label in zip(seg_videoId_lst, total_pred, total_label):
+        if seg_videoId == cur_video:
+            assert start < len(video_pred)
+            if end <= len(video_pred):
+                video_pred[start: end] = video_pred[start: end] + pred
+                if total_label:
+                    video_label[start: end] = video_label[start: end] + label
+                video_cnt_lst[start: end] = video_cnt_lst[start: end] + 1
+            else:
+                pad_num = end - len(video_pred)
+                video_pred[start:] = video_pred[start:] + pred[:-pad_num]
+                if total_label:
+                    video_label[start:] = video_label[start:] + label[:-pad_num]
+                video_cnt_lst[start:] = video_cnt_lst[start:] + 1
+            start += hop_len
+            end += hop_len
+            idx += 1
+        else:
+            # 把上一个视频处理好
+            assert np.all(video_cnt_lst)
+            video_pred = video_pred / video_cnt_lst
+            final_pred.append(video_pred)
+            if total_label:
+                video_label = video_label / video_cnt_lst
+                video_dict = {'video_id': cur_video, 'pred': video_pred, 'label': video_label}
+                final_label.append(video_label)
+            else:
+                video_dict = {'video_id': cur_video, 'pred': video_pred}
+            all_video_dict[cur_video] = video_dict
+
+            # 准备好处理下一个视频
+            cur_video = seg_videoId
+            video_cnt += 1
+            video_pred = np.zeros(video_len_list[video_cnt])
+            if total_label:
+                video_label = np.zeros(video_len_list[video_cnt])
+            video_cnt_lst = np.zeros(video_len_list[video_cnt])
+            start = 0
+            end = win_len
+
+    # 处理好最后一个视频
+    assert np.all(video_cnt_lst)
+    video_pred = video_pred / video_cnt_lst
+    final_pred.append(video_pred)
+    if total_label:
+        video_label = video_label / video_cnt_lst
+        video_dict = {'video_id': cur_video, 'pred': video_pred, 'label': video_label}
+        final_label.append(video_label)
+    else:
+        video_dict = {'video_id': cur_video, 'pred': video_pred}
+    all_video_dict[cur_video] = video_dict
+
+    assert len(final_pred) == len(video_list)
+
+    if total_label:
+        return final_pred, final_label, all_video_dict
+    else:
+        return final_pred, all_video_dict
+
 
 def eval_for_val(model, val_dataset, target, best_window):
     '''
@@ -175,6 +252,7 @@ def eval_for_val(model, val_dataset, target, best_window):
     - window
     '''
     model.eval()
+    seg_videoId_lst = []
     total_pred = []
     total_label = []
 
@@ -185,81 +263,86 @@ def eval_for_val(model, val_dataset, target, best_window):
     for i, data in enumerate(val_dataset):  # inner loop within one epoch
         model.set_input(data)         # unpack data from dataset and apply preprocessing
         model.test()
-        lengths = data['length'].numpy()
         if model.target_name == 'both':
-            pred = remove_padding(model.output[..., 0 if target == 'valence' else 1].detach().cpu().numpy(),
-                                  lengths)
+            pred = model.output[..., 0 if target == 'valence' else 1].detach().cpu().numpy()
         else:
-            pred = remove_padding(model.output.detach().cpu().numpy(), lengths)
+            pred = model.output.detach().cpu().squeeze(0).numpy()
+        label = data[target].numpy()
 
-        label = remove_padding(data[target].numpy(), lengths)
-        total_pred += pred
-        total_label += label
-        for j, video_id in enumerate(data['video_id']):
-            ori_pred = pred[j]
-            processed_pred = process_preds(ori_pred)
-            smooth_pred = smooth_prediction(ori_pred, best_window)
-            smooth_pred = process_preds(smooth_pred)
+        seg_videoId_lst += data['video_id']
+        total_pred.append(pred) # pred: (bs, win_len, reg_output)
+        total_label.append(label)
 
-            nosmooth_ori_dict[video_id] = {'video_id': video_id,
-                                            'pred': ori_pred.tolist(),
-                                            'label': label[j].tolist()}
-            nosmooth_dict[video_id] = {'video_id': video_id,
-                                            'pred': processed_pred.tolist(),
-                                            'label': label[j].tolist()}
-            smooth_dict[video_id] = {'video_id': video_id,
-                                            'pred': smooth_pred.tolist(),
-                                            'label': label[j].tolist()}
+    total_pred = np.concatenate(total_pred, axis=0) # total_pred: (total_num_segs, win_len, reg_output)
+    total_label = np.concatenate(total_label, axis=0) # total_pred: (total_num_segs, win_len, reg_output)
 
-    nosmooth_ori_pred = scratch_data(total_pred)
-    smoothed_pred, best_window = smooth_func(total_pred, total_label, best_window)
-    # smoothed_pred = [] # 这样做结果稍低一点点
-    # for pred in total_pred:
-    #     smoothed_pred.append(process_preds(pred))
-    # smoothed_pred, best_window = smooth_func(smoothed_pred, total_label, best_window)
+    avg_pred, avg_label, avg_results = get_avg_result(val_dataset, seg_videoId_lst, total_pred, total_label)
+
+    avg_pred = np.array(avg_pred)
+    avg_label = np.array(avg_label)
+
+    for video_id in list(avg_results.keys()):
+        ori_pred = avg_results[video_id]['pred']
+        label = avg_results[video_id]['label']
+        processed_pred = process_preds(ori_pred)
+        smooth_pred = smooth_prediction(ori_pred, best_window)
+        smooth_pred = process_preds(smooth_pred)
+
+        nosmooth_ori_dict[video_id] = {'video_id': video_id,
+                                        'pred': ori_pred.tolist(),
+                                        'label': label.tolist()}
+        nosmooth_dict[video_id] = {'video_id': video_id,
+                                        'pred': processed_pred.tolist(),
+                                        'label': label.tolist()}
+        smooth_dict[video_id] = {'video_id': video_id,
+                                        'pred': smooth_pred.tolist(),
+                                        'label': label.tolist()}
+
+    nosmooth_ori_pred = scratch_data(avg_pred)
+    smoothed_pred, best_window = smooth_func(avg_pred, avg_label, best_window)
 
     smoothed_pred = scratch_data(smoothed_pred)
-    total_label = scratch_data(total_label)
+    avg_label = scratch_data(avg_label)
 
     nosmooth_pred = process_preds(nosmooth_ori_pred)
     smoothed_pred = process_preds(smoothed_pred)
 
-    nosmooth_ori_mse, nosmooth_ori_rmse, nosmooth_ori_pcc, nosmooth_ori_ccc = evaluate_regression(total_label, nosmooth_ori_pred)
-    nosmooth_mse, nosmooth_rmse, nosmooth_pcc, nosmooth_ccc = evaluate_regression(total_label, nosmooth_pred)
-    smoothed_mse, smoothed_rmse, smoothed_pcc, smoothed_ccc = evaluate_regression(total_label, smoothed_pred)
+    nosmooth_ori_mse, nosmooth_ori_rmse, nosmooth_ori_pcc, nosmooth_ori_ccc = evaluate_regression(avg_label, nosmooth_ori_pred)
+    nosmooth_mse, nosmooth_rmse, nosmooth_pcc, nosmooth_ccc = evaluate_regression(avg_label, nosmooth_pred)
+    smoothed_mse, smoothed_rmse, smoothed_pcc, smoothed_ccc = evaluate_regression(avg_label, smoothed_pred)
 
     return nosmooth_ori_dict, nosmooth_ori_ccc, nosmooth_dict, nosmooth_ccc, smooth_dict, smoothed_ccc, best_window
 
 
 def get_test_pred(model, test_dataset, target, best_window):
     model.eval()
+    seg_videoId_lst = []
     total_pred = []
-
     smooth_dict = {}
 
     for i, data in enumerate(test_dataset):  # inner loop within one epoch
         model.set_input(data, load_label=False)         # unpack data from dataset and apply preprocessing
         model.test()
-        lengths = data['length'].numpy()
         if model.target_name == 'both':
-            pred = remove_padding(model.output[..., 0 if target == 'valence' else 1].detach().cpu().numpy(),
-                                  lengths)
+            pred = model.output[..., 0 if target == 'valence' else 1].detach().cpu().numpy()
         else:
-            pred = remove_padding(model.output.detach().cpu().numpy(), lengths)
-        total_pred += pred
-        for j, video_id in enumerate(data['video_id']):
-            ori_pred = pred[j]
-            smoothed_pred = smooth_prediction(ori_pred, best_window)
-            smoothed_pred = process_preds(smoothed_pred)
-            smooth_dict[video_id] = {'video_id': video_id,
-                                            'pred': smoothed_pred.tolist()}
+            pred = model.output.detach().cpu().squeeze(0).numpy()
 
-    # smoothed_pred, best_window = smooth_func(total_pred, best_window=best_window)
-    # smoothed_pred = scratch_data(smoothed_pred)
-    # smoothed_pred = process_preds(smoothed_pred)
+        seg_videoId_lst += data['video_id']
+        total_pred.append(pred) # pred: (bs, win_len, reg_output)
+
+    total_pred = np.concatenate(total_pred, axis=0) # total_pred: (total_num_segs, win_len, reg_output)
+
+    avg_pred, avg_results = get_avg_result(test_dataset, seg_videoId_lst, total_pred)
+
+    for video_id in list(avg_results.keys()):
+        ori_pred = avg_results[video_id]['pred']
+        smooth_pred = smooth_prediction(ori_pred, best_window)
+        smooth_pred = process_preds(smooth_pred)
+        smooth_dict[video_id] = {'video_id': video_id,
+                                        'pred': smooth_pred.tolist()}
 
     return smooth_dict, best_window
-
 
 
 if __name__ == '__main__':

@@ -13,8 +13,8 @@ nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/3-18/slide
-checkpoints_dir=./checkpoints/3-18/slide
+log_dir=./logs/3-21/slide
+checkpoints_dir=./checkpoints/3-21/slide
 
 target=$1
 feature=$2
@@ -39,8 +39,8 @@ echo $cmd | sh
 
 
 # bash scripts/train_transformer_slide.sh both affectnet,vggish,wav2vec None 1 0
-# bash scripts/train_transformer_slide.sh both affectnet,vggish,wav2vec None 2 0
-# bash scripts/train_transformer_slide.sh both affectnet,vggish,wav2vec None 3 0
+# bash scripts/train_transformer_slide.sh both affectnet,vggish,wav2vec None 2 1
+# bash scripts/train_transformer_slide.sh both affectnet,vggish,wav2vec None 3 3
 # bash scripts/train_transformer_slide.sh both affectnet,compare,wav2vec compare 1 4
-# bash scripts/train_transformer_slide.sh both affectnet,compare,wav2vec compare 2 4
-# bash scripts/train_transformer_slide.sh both affectnet,compare,wav2vec compare 3 4
+# bash scripts/train_transformer_slide.sh both affectnet,compare,wav2vec compare 2 5
+# bash scripts/train_transformer_slide.sh both affectnet,compare,wav2vec compare 3 6

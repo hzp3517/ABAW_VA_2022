@@ -52,6 +52,9 @@ echo $cmd | sh
 # bash scripts/train_transformer_lstm_2.sh both affectnet,vggish,wav2vec None y 2 1
 # bash scripts/train_transformer_lstm_2.sh both affectnet,vggish,wav2vec None y 3 1
 
-# bash scripts/train_transformer_lstm_2.sh both affectnet,vggish,wav2vec None n 1 1
-# bash scripts/train_transformer_lstm_2.sh both affectnet,vggish,wav2vec None n 2 1
-# bash scripts/train_transformer_lstm_2.sh both affectnet,vggish,wav2vec None n 3 1
+
+# bash scripts/train_transformer_lstm_2.sh both affectnet,vggish,wav2vec None n 4 0
+# bash scripts/train_transformer_lstm_2.sh both affectnet,vggish,wav2vec None n 5 1
+
+# bash scripts/train_transformer_lstm_2.sh both affectnet,wav2vec None n 4 2
+# bash scripts/train_transformer_lstm_2.sh both affectnet,wav2vec None n 5 3

@@ -25,3 +25,4 @@ wav2vec_ckpt
 .wav2vec.py.swp
 val_results*
 test_results*
+pred_csv*

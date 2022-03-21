@@ -65,13 +65,13 @@ def get_avg_result(val_iter, seg_videoId_lst, total_pred, total_label):
         if seg_videoId == cur_video:
             assert start < len(video_pred)
             if end <= len(video_pred):
-                video_pred[start: end] = pred
-                video_label[start: end] = label
+                video_pred[start: end] = video_pred[start: end] + pred
+                video_label[start: end] = video_label[start: end] + label
                 video_cnt_lst[start: end] = video_cnt_lst[start: end] + 1
             else:
                 pad_num = end - len(video_pred)
-                video_pred[start:] = pred[:-pad_num]
-                video_label[start:] = label[:-pad_num]
+                video_pred[start:] = video_pred[start:] + pred[:-pad_num]
+                video_label[start:] = video_label[start:] + label[:-pad_num]
                 video_cnt_lst[start:] = video_cnt_lst[start:] + 1
             start += hop_len
             end += hop_len

@@ -44,6 +44,6 @@ for set_name in set_list:
         detect_len = len(os.listdir(corr_video_frame_dir))
 
         # assert record_len == detect_len
-        if record_len != detect_len:
-            # print(record_len, detect_len)
-            print(video)
+        if record_len != detect_len + 1:
+            print(record_len, detect_len)
+            # print(video)
