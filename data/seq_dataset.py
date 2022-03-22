@@ -16,9 +16,6 @@ sys.path.append('/data2/hzp/ABAW_VA_2022/code')
 from data.base_dataset import BaseDataset#
 from utils.bins import get_center_and_bounds
 
-
-
-
 class SeqDataset(BaseDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):

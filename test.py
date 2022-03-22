@@ -3,6 +3,7 @@ val_pred_{valence/arousal}_nosmooth_ori.json
 val_pred_{valence/arousal}_nosmooth.json 
 val_pred_{valence/arousal}_smooth.json 
 val_pred_{valence/arousal}_result.txt
+tst_pred_{valence/arousal}_nosmooth.json
 tst_pred_{valence/arousal}_smooth.json
 
 smooth window: 
@@ -236,6 +237,7 @@ def get_test_pred(model, test_dataset, target, best_window):
     total_pred = []
 
     smooth_dict = {}
+    nosmooth_dict = {}
 
     for i, data in enumerate(test_dataset):  # inner loop within one epoch
         model.set_input(data, load_label=False)         # unpack data from dataset and apply preprocessing
@@ -249,8 +251,15 @@ def get_test_pred(model, test_dataset, target, best_window):
         total_pred += pred
         for j, video_id in enumerate(data['video_id']):
             ori_pred = pred[j]
+            no_smoothed_pred = process_preds(ori_pred)
+
             smoothed_pred = smooth_prediction(ori_pred, best_window)
             smoothed_pred = process_preds(smoothed_pred)
+
+            nosmooth_dict[video_id] = {'video_id': video_id,
+                                            'pred': no_smoothed_pred.tolist()}
+
+
             smooth_dict[video_id] = {'video_id': video_id,
                                             'pred': smoothed_pred.tolist()}
 
@@ -258,7 +267,7 @@ def get_test_pred(model, test_dataset, target, best_window):
     # smoothed_pred = scratch_data(smoothed_pred)
     # smoothed_pred = process_preds(smoothed_pred)
 
-    return smooth_dict, best_window
+    return nosmooth_dict, smooth_dict, best_window
 
 
 
@@ -294,6 +303,7 @@ if __name__ == '__main__':
         val_nosmooth_pred_path = os.path.join(save_dir, 'val_pred_{}_nosmooth.json'.format(opt.test_target))
         val_smooth_pred_path = os.path.join(save_dir, 'val_pred_{}_smooth.json'.format(opt.test_target))
         val_result_path = os.path.join(save_dir, 'val_pred_{}_result.txt'.format(opt.test_target))
+        test_nosmooth_pred_path = os.path.join(save_dir, 'tst_pred_{}_nosmooth.json'.format(opt.test_target))
         test_smooth_pred_path = os.path.join(save_dir, 'tst_pred_{}_smooth.json'.format(opt.test_target))
         assert opt.test_target in ['valence', 'arousal']
         
@@ -313,5 +323,6 @@ if __name__ == '__main__':
             f.writelines(line)
 
         print('Getting the predictions of the test set ... \n')
-        test_smoothed_dict, window = get_test_pred(model, test_dataset, opt.test_target, setting_window)
+        test_nosmoothed_dict, test_smoothed_dict, window = get_test_pred(model, test_dataset, opt.test_target, setting_window)
+        json.dump(test_nosmoothed_dict, open(test_nosmooth_pred_path, 'w'))
         json.dump(test_smoothed_dict, open(test_smooth_pred_path, 'w'))

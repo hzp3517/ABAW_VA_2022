@@ -9,258 +9,276 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
-import h5py
 from tqdm import tqdm
+
+import sys
+sys.path.append('/data2/hzp/ABAW_VA_2022/code')
 from data.base_dataset import BaseDataset
+from utils.bins import get_center_and_bounds
 
 
-class SeqDataset(BaseDataset):
+class SeqLateDataset(BaseDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.add_argument('--a_features', type=str, default='None', help='feature to use, split by comma, eg: "egemaps,vggface"')
         parser.add_argument('--v_features', type=str, default='None', help='feature to use, split by comma, eg: "egemaps,vggface"')
-        parser.add_argument('--l_features', type=str, default='None', help='feature to use, split by comma, eg: "egemaps,vggface"')
+        parser.add_argument('--norm_method', type=str, default='trn', choices=['batch', 'trn'], help='whether normalize method to use')
+        parser.add_argument('--norm_features', type=str, default='None', help='feature to normalize, split by comma, eg: "egemaps,vggface"')
         return parser
 
 
     def __init__(self, opt, set_name):
-        ''' MuseWild dataset
+        ''' Sequential Late Fusion Dataset
         Parameter:
         --------------------------------------
-        set_name: [trn, val, tst]
+        set_name: [train, val, test, train_eval]
         '''
         super().__init__(opt)
-        self.root = '/data12/lrc/MUSE2021/h5_data/c3_muse_stress/'
-        self.a_features = list(map(lambda x: x.strip(), opt.a_features.split(',')))
-        self.v_features = list(map(lambda x: x.strip(), opt.v_features.split(',')))
-        self.l_features = list(map(lambda x: x.strip(), opt.l_features.split(',')))
-
+        self.root = '/data2/hzp/ABAW_VA_2022/processed_data/'
+        self.a_features = list(map(lambda x: x.strip(), opt.a_features.split(','))) if opt.a_features != 'None' and opt.a_features != 'none' else []
+        self.v_features = list(map(lambda x: x.strip(), opt.v_features.split(','))) if opt.v_features != 'None' and opt.v_features != 'none' else []
+        self.norm_method = opt.norm_method
+        self.norm_features = list(map(lambda x: x.strip(), opt.norm_features.split(',')))
         self.set_name = set_name
+
+        bin_centers, bin_bounds = get_center_and_bounds(opt.cls_weighted)
+        self.bin_centers = dict([(key, np.array(value)) for key, value in bin_centers.items()])
+        self.bin_bounds = dict([(key, np.array(value)) for key, value in bin_bounds.items()])
+
         self.load_label()
         self.load_feature()
         self.manual_collate_fn = True
-        print(f"MuseWild dataset {set_name} created with total length: {len(self)}")
+        print(f"Aff-Wild2 Sequential Late Fusion dataset {set_name} created with total length: {len(self)}")
     
+    def normalize_on_trn(self, feature_name, features):
+        '''
+        features的shape：[seg_len, ft_dim]
+        mean_f与std_f的shape：[ft_dim,]，已经经过了去0处理
+        '''
+        mean_std_file = h5py.File(os.path.join(self.root, 'features', 'mean_std_on_trn', feature_name + '.h5'), 'r')
+        mean_trn = np.array(mean_std_file['train']['mean'])
+        std_trn = np.array(mean_std_file['train']['std'])
+        features = (features - mean_trn) / std_trn
+        return features
+
+    def normalize_on_batch(self, features):
+        '''
+        输入张量的shape：[bs, seq_len, ft_dim]
+        mean_f与std_f的shape：[bs, 1, ft_dim]
+        '''
+        mean_f = torch.mean(features, dim=1).unsqueeze(1).float()
+        std_f = torch.std(features, dim=1).unsqueeze(1).float()
+        std_f[std_f == 0.0] = 1.0
+        features = (features - mean_f) / std_f
+        return features
+
     def load_label(self):
-        partition_h5f = h5py.File(os.path.join(self.root, 'target', 'partition.h5'), 'r')
-        self.seg_ids = sorted(partition_h5f[self.set_name])
-        self.seg_ids = list(map(lambda x: str(x), self.seg_ids))
-        label_h5f = h5py.File(os.path.join(self.root, 'target', '{}_target.h5'.format(self.set_name)), 'r')
-        self.target = {}
-        for _id in self.seg_ids:
-            if self.set_name != 'tst':
-                self.target[_id] = {
-                    'arousal': torch.from_numpy(label_h5f[_id]['arousal'][()]).float(),
-                    'valence': torch.from_numpy(label_h5f[_id]['valence'][()]).float(),
-                    'length': torch.as_tensor(label_h5f[_id]['length'][()]).long(),
-                    'timestamp': torch.from_numpy(label_h5f[_id]['timestamp'][()]).long(),
-                }
+        set_name = 'train' if self.set_name == 'train_eval' else self.set_name
+        label_path = os.path.join(self.root, 'targets/{}_valid_targets.h5'.format(set_name))
+        label_h5f = h5py.File(label_path, 'r')
+        self.video_list = list(label_h5f.keys())
+
+        self.target_list = []
+        for video in self.video_list:
+            video_dict = {}
+            if self.set_name != 'test':
+                video_dict['valence'] = torch.from_numpy(label_h5f[video]['valence'][()]).float()
+                video_dict['arousal'] = torch.from_numpy(label_h5f[video]['arousal'][()]).float()
+                video_dict['length'] = label_h5f[video]['length'][()]
+                for target in ['valence', 'arousal']:
+                    bin_labels = torch.zeros((len(video_dict[target]), ), dtype=torch.long)
+                    for b in range(22):
+                        index = (video_dict[target] < self.bin_bounds[target][b+1]) & (video_dict[target] > self.bin_bounds[target][b])
+                        bin_labels[index] = b
+                    video_dict[target+'_cls'] = bin_labels #[L, ]
             else:
-                self.target[_id] = {
-                    'length': torch.as_tensor(label_h5f[_id]['length'][()]).long(),
-                    'timestamp': torch.from_numpy(label_h5f[_id]['timestamp'][()]).long(),
-                }
+                video_dict['length'] = label_h5f[video]['length'][()]
+            self.target_list.append(video_dict)
 
     def load_feature(self):
         '''
-        共创建三个字典：
-        self.a_feature_data; self.v_feature_data; self.l_feature_data
-        如果没有对应的特征，则该字典为空
+        create two dictionary:
+        self.a_feature_data; self.v_feature_data
+        if no corresponding features, the dictionary should be empty
         '''
-        #a模态：
+        all_features = self.a_features + self.v_features
         self.a_feature_data = {}
-        if self.a_features[0] != 'None':
-            for feature_name in self.a_features:
-                h5f = h5py.File(os.path.join(self.root, 'feature', '{}.h5'.format(feature_name)), 'r')
-                feature_data = {}
-                for _id in self.seg_ids:
-                    feature_data[_id] = h5f[self.set_name][_id]['feature'][()]
-                    # assert (h5f[self.set_name][_id]['timestamp'][()] == self.target[_id]['timestamp'].numpy()).all(), '\
-                    assert len(h5f[self.set_name][_id]['timestamp'][()]) == len(self.target[_id]['timestamp']), '\
-                        Data Error: In feature {}, seg_id: {}, timestamp does not match label timestamp'.format(feature_name, _id)
-                self.a_feature_data[feature_name] = feature_data
-        
-        #v模态：
         self.v_feature_data = {}
-        if self.v_features[0] != 'None':
-            for feature_name in self.v_features:
-                h5f = h5py.File(os.path.join(self.root, 'feature', '{}.h5'.format(feature_name)), 'r')
-                feature_data = {}
-                for _id in self.seg_ids:
-                    feature_data[_id] = h5f[self.set_name][_id]['feature'][()]
-                    # assert (h5f[self.set_name][_id]['timestamp'][()] == self.target[_id]['timestamp'].numpy()).all(), '\
-                    assert len(h5f[self.set_name][_id]['timestamp'][()]) == len(self.target[_id]['timestamp']), '\
-                        Data Error: In feature {}, seg_id: {}, timestamp does not match label timestamp'.format(feature_name, _id)
-                self.v_feature_data[feature_name] = feature_data
 
-        #l模态：
-        self.l_feature_data = {}
-        if self.l_features[0] != 'None':
-            for feature_name in self.l_features:
-                h5f = h5py.File(os.path.join(self.root, 'feature', '{}.h5'.format(feature_name)), 'r')
-                feature_data = {}
-                for _id in self.seg_ids:
-                    feature_data[_id] = h5f[self.set_name][_id]['feature'][()]
-                    # assert (h5f[self.set_name][_id]['timestamp'][()] == self.target[_id]['timestamp'].numpy()).all(), '\
-                    assert len(h5f[self.set_name][_id]['timestamp'][()]) == len(self.target[_id]['timestamp']), '\
-                        Data Error: In feature {}, seg_id: {}, timestamp does not match label timestamp'.format(feature_name, _id)
-                self.l_feature_data[feature_name] = feature_data
+        for feature_name in all_features:
+            if feature_name in self.a_features:
+                self.a_feature_data[feature_name] = []
+            else:
+                self.v_feature_data[feature_name] = []
+            set_name = 'train' if self.set_name == 'train_eval' else self.set_name
+            feature_path = os.path.join(self.root, 'features/{}_{}.h5'.format(set_name, feature_name))
+            feature_h5f = h5py.File(feature_path, 'r')
+            for idx, video in enumerate(tqdm(self.video_list, desc='loading {} feature'.format(feature_name))):
+                video_dict = {}
+                video_dict['fts'] = feature_h5f[video]['fts'][()] #shape:(seg_len, ft_dim)
+                assert len(video_dict['fts']) == int(self.target_list[idx]['length']), '\
+                    Data Error: In feature {}, video_id: {}, frame does not match label frame'.format(feature_name, video)
+                # normalize on trn:
+                if (self.norm_method=='trn') and (feature_name in self.norm_features):
+                    video_dict['fts'] = self.normalize_on_trn(feature_name, video_dict['fts'])
+                if feature_name in self.a_features:
+                    self.a_feature_data[feature_name].append(video_dict)
+                else:
+                    self.v_feature_data[feature_name].append(video_dict)
 
     def __getitem__(self, index):
         '''
-        如果某个模态无特征，返回值中对应的x_feature和x_feature_lens就设为None。
+        if modal `x` has no features, the `x_feature_list` should be None
         '''
-        seg_id = self.seg_ids[index]
+        target_data = self.target_list[index]
         
-        #a模态：
-        if self.a_feature_data:
-            a_feature_data = []
-            a_feature_len = []
-            for feature_name in self.a_features:
-                a_feature_data.append(self.a_feature_data[feature_name][seg_id])
-                a_feature_len.append(self.a_feature_data[feature_name][seg_id].shape[1])
-            a_feature_data = torch.from_numpy(np.concatenate(a_feature_data, axis=1)).float()
-            a_feature_data = a_feature_data.squeeze()
-            a_feature_len = torch.from_numpy(np.array(a_feature_len)).long()
-        else:
-            a_feature_data = None
-            a_feature_len = None
+        # if self.a_feature_data:
+        a_feature_list = []
+        a_feature_dims = []
+        for feature_name in self.a_features:
+            data = torch.from_numpy(self.a_feature_data[feature_name][index]['fts']).float()
+            a_feature_list.append(data)
+            a_feature_dims.append(self.a_feature_data[feature_name][index]['fts'].shape[1])
+        a_feature_dims = torch.from_numpy(np.array(a_feature_dims)).long()
+        # else:
+            # a_feature_list = None
+            # a_feature_dims = None
 
-        #v模态：
-        if self.v_feature_data:
-            v_feature_data = []
-            v_feature_len = []
-            for feature_name in self.v_features:
-                v_feature_data.append(self.v_feature_data[feature_name][seg_id])
-                v_feature_len.append(self.v_feature_data[feature_name][seg_id].shape[1])
-            v_feature_data = torch.from_numpy(np.concatenate(v_feature_data, axis=1)).float()
-            v_feature_data = v_feature_data.squeeze()
-            v_feature_len = torch.from_numpy(np.array(v_feature_len)).long()
-        else:
-            v_feature_data = None
-            v_feature_len = None
+        # if self.v_feature_data:
+        v_feature_list = []
+        v_feature_dims = []
+        for feature_name in self.v_features:
+            data = torch.from_numpy(self.v_feature_data[feature_name][index]['fts']).float()
+            v_feature_list.append(data)
+            v_feature_dims.append(self.v_feature_data[feature_name][index]['fts'].shape[1])
+        v_feature_dims = torch.from_numpy(np.array(v_feature_dims)).long()
+        # else:
+            # v_feature_list = None
+            # v_feature_dims = None
 
-        #l模态：
-        if self.l_feature_data:
-            l_feature_data = []
-            l_feature_len = []
-            for feature_name in self.l_features:
-                l_feature_data.append(self.l_feature_data[feature_name][seg_id])
-                l_feature_len.append(self.l_feature_data[feature_name][seg_id].shape[1])
-            l_feature_data = torch.from_numpy(np.concatenate(l_feature_data, axis=1)).float()
-            l_feature_data = l_feature_data.squeeze()
-            l_feature_len = torch.from_numpy(np.array(l_feature_len)).long()
-        else:
-            l_feature_data = None
-            l_feature_len = None
-
-        target_data = self.target[seg_id]
-        return {**{"a_feature": a_feature_data, "v_feature": v_feature_data, "l_feature": l_feature_data, 
-                    "a_feature_lens": a_feature_len, "v_feature_lens": v_feature_len, "l_feature_lens": l_feature_len, "vid": seg_id},
-                **target_data, **{"a_feature_names": self.a_features, "v_feature_names": self.v_features, "l_feature_names": self.l_features}} #**：对字典进行解引用
+        return {**{"a_feature_list": a_feature_list, "v_feature_list": v_feature_list, 
+                    "a_feature_dims": a_feature_dims, "v_feature_dims": v_feature_dims, "video_id": self.video_list[index]},
+                **target_data, **{"a_feature_names": self.a_features, "v_feature_names": self.v_features}}
     
     def __len__(self):
-        return len(self.seg_ids)
+        return len(self.video_list)
     
+
     def collate_fn(self, batch):
         '''
         Collate functions assume batch = [Dataset[i] for i in index_set]
-        如果某个模态无特征，返回值中对应的x_feature和x_feature_lens就设为None。
+        if modal `x` has no features, the `x_feature` should be None
         '''
-        timestamp = pad_sequence([sample['timestamp'] for sample in batch], padding_value=torch.tensor(-1), batch_first=True)
-        length = torch.tensor([sample['length'] for sample in batch])
-        vid = [sample['vid'] for sample in batch]
+        a_feature_num = len(batch[0]['a_feature_list'])
+        if a_feature_num:
+            a_feature = []
+            for i in range(a_feature_num):
+                feature_name = self.a_features[i]
+                pad_ft = pad_sequence([sample['a_feature_list'][i] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
+                pad_ft = pad_ft.float()
+                # normalize on batch:
+                if (self.norm_method=='batch') and (feature_name in self.norm_features):
+                    pad_ft = self.normalize_on_batch(pad_ft)
+                a_feature.append(pad_ft)
+            a_feature = torch.cat(a_feature, dim=2) # pad_ft: (bs, seq_len, ft_dim), concat all the audio features
+        else:
+            a_feature = None
 
-        if self.set_name != 'tst':
+        v_feature_num = len(batch[0]['v_feature_list'])
+        if v_feature_num:
+            v_feature = []
+            for i in range(v_feature_num):
+                feature_name = self.v_features[i]
+                pad_ft = pad_sequence([sample['v_feature_list'][i] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
+                pad_ft = pad_ft.float()
+                # normalize on batch:
+                if (self.norm_method=='batch') and (feature_name in self.norm_features):
+                    pad_ft = self.normalize_on_batch(pad_ft)
+                v_feature.append(pad_ft)
+            v_feature = torch.cat(v_feature, dim=2) # pad_ft: (bs, seq_len, ft_dim), concat all the audio features
+        else:
+            v_feature = None
+
+        length = torch.tensor([sample['length'] for sample in batch])
+        video_id = [sample['video_id'] for sample in batch]
+
+        if self.set_name != 'test':
             arousal = pad_sequence([sample['arousal'] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
             valence = pad_sequence([sample['valence'] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
+            arousal_cls = pad_sequence([sample['arousal_cls'] for sample in batch], padding_value=torch.tensor(-1), batch_first=True)
+            valence_cls = pad_sequence([sample['valence_cls'] for sample in batch], padding_value=torch.tensor(-1), batch_first=True)
         
+        a_feature_dims = batch[0]['a_feature_dims']
+        a_feature_names = batch[0]['a_feature_names']
+        v_feature_dims = batch[0]['v_feature_dims']
+        v_feature_names = batch[0]['v_feature_names']
+
         # make mask
         batch_size = length.size(0)
         batch_max_length = torch.max(length)
         mask = torch.zeros([batch_size, batch_max_length]).float()
         for i in range(batch_size):
             mask[i][:length[i]] = 1.0
-
-        a_feature = None if batch[0]['a_feature']==None else pad_sequence([sample['a_feature'] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
-        v_feature = None if batch[0]['v_feature']==None else pad_sequence([sample['v_feature'] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
-        l_feature = None if batch[0]['l_feature']==None else pad_sequence([sample['l_feature'] for sample in batch], padding_value=torch.tensor(0.0), batch_first=True)
-
-        a_feature_lens = batch[0]['a_feature_lens']
-        v_feature_lens = batch[0]['v_feature_lens']
-        l_feature_lens = batch[0]['l_feature_lens']
-        a_feature_names = batch[0]['a_feature_names']
-        v_feature_names = batch[0]['v_feature_names']
-        l_feature_names = batch[0]['l_feature_names']
         
         return {
             'a_feature': None if a_feature==None else a_feature.float(),
             'v_feature': None if v_feature==None else v_feature.float(),
-            'l_feature': None if l_feature==None else l_feature.float(),
             'arousal': arousal.float(), 
             'valence': valence.float(),
-            'timestamp': timestamp.long(),
+            'arousal_cls': arousal_cls.long(),
+            'valence_cls': valence_cls.long(),
             'mask': mask.float(),
             'length': length,
-            'a_feature_lens': a_feature_lens,
-            'v_feature_lens': v_feature_lens,
-            'l_feature_lens': l_feature_lens,
+            'a_feature_dims': a_feature_dims,
+            'v_feature_dims': v_feature_dims,
             'a_feature_names': a_feature_names,
             'v_feature_names': v_feature_names,
-            'l_feature_names': l_feature_names,
-            'vid': vid
-        } if self.set_name != 'tst' else {
+            'video_id': video_id
+        } if self.set_name != 'test' else {
             'a_feature': None if a_feature==None else a_feature.float(),
             'v_feature': None if v_feature==None else v_feature.float(),
-            'l_feature': None if l_feature==None else l_feature.float(),
-            'timestamp': timestamp.long(),
             'mask': mask.float(),
             'length': length,
-            'a_feature_lens': a_feature_lens,
-            'v_feature_lens': v_feature_lens,
-            'l_feature_lens': l_feature_lens,
+            'a_feature_dims': a_feature_dims,
+            'v_feature_dims': v_feature_dims,
             'a_feature_names': a_feature_names,
             'v_feature_names': v_feature_names,
-            'l_feature_names': l_feature_names,
-            'vid': vid
+            'video_id': video_id
         }
 
 if __name__ == '__main__':
+    from data import create_dataset_with_args
+
     class test:
-        #feature_set = 'bert,vggface,vggish'
-        feature_set = 'None'
-        #a_features = 'vggish'
-        a_features = 'None'
-        v_features = 'vggface'
-        l_features = 'bert'
-        dataroot = '/data12/lrc/MUSE2021/h5_data/c3_muse_stress/'
+        a_features = 'vggish'
+        v_features = 'affectnet'
+        dataroot = '/data9/hzp/ABAW_VA_2022/processed_data/'
         max_seq_len = 100
+        norm_method = ''
+        norm_features = ''
+        cls_weighted = False
+        dataset_mode = 'seq_late'
+        batch_size = 3
+        serial_batches = False
+        num_threads = 0
+        max_dataset_size = float('inf')
     
     opt = test()
-    a = MuseLateStressDataset(opt, 'trn')
-    iter_a = iter(a)
-    data1 = next(iter_a)
-    data2 = next(iter_a)
-    data3 = next(iter_a)
-    batch_data = a.collate_fn([data1, data2, data3])
-    print(batch_data.keys())
-    #print(batch_data['a_feature'].shape)
-    print(batch_data['v_feature'].shape)
-    print(batch_data['l_feature'].shape)
-    print(batch_data['arousal'].shape)
-    print(batch_data['valence'].shape)
-    print(batch_data['mask'].shape)
-    print(batch_data['length'])
-    print(torch.sum(batch_data['mask'][0]), torch.sum(batch_data['mask'][1]), torch.sum(batch_data['mask'][2]))
-    print(batch_data['a_feature_names'])
-    print(batch_data['v_feature_names'])
-    print(batch_data['l_feature_names'])
-    print(batch_data['a_feature_lens'])
-    print(batch_data['v_feature_lens'])
-    print(batch_data['l_feature_lens'])
-    print(batch_data['vid'])
-    # print(data['feature'].shape)
-    # print(data['feature_lens'])
-    # print(data['feature_names'])
-    # print(data['length'])
+
+    dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
+    for i, data in enumerate(dataset):
+        print(data['a_feature'].shape)
+        print(data['v_feature'].shape)
+        print(data['a_feature_dims'])
+        print(data['v_feature_dims'])
+        print(data['a_feature_names'])
+        print(data['v_feature_names'])
+        print(data['mask'].shape)
+        print(data['length'])
+        print(torch.sum(data['mask'][0]), torch.sum(data['mask'][1]), torch.sum(data['mask'][2]))
+        print(data['valence'].shape)
+        print(data['arousal'].shape)
+        print(data['video_id'])
+        if i >= 0:
+            break
 

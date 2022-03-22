@@ -219,7 +219,6 @@ if __name__ == '__main__':
         serial_batches = False
         num_threads = 0
         max_dataset_size = float('inf')
-        dataset_mode = 'seq_slide'
     
     opt = test()
 

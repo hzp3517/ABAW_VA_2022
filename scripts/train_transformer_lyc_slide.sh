@@ -4,8 +4,6 @@ batch_size=16
 lr=2e-5
 dropout=0.3
 regress_layers=256,256
-win_len=250
-hop_len=50
 hidden_size=256
 num_layers=4
 ffn_dim=1024
@@ -13,14 +11,16 @@ nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/3-19/lycslide
-checkpoints_dir=./checkpoints/3-19/lycslide
+log_dir=./logs/3-21/lycslide
+checkpoints_dir=./checkpoints/3-21/lycslide
 
 target=$1
 feature=$2
 norm_features=$3
-run_idx=$4
-gpu_ids=$5
+win_len=$4
+hop_len=$5
+run_idx=$6
+gpu_ids=$7
 
 
 cmd="python train_slide_seed.py --dataset_mode=seq_lyc_slide --model=transformer_slide --gpu_ids=$gpu_ids
@@ -38,6 +38,6 @@ echo "--------------------------------------------------------------------------
 echo $cmd | sh
 
 
-# bash scripts/train_transformer_lyc_slide.sh both affectnet,vggish,wav2vec None 1 3
-# bash scripts/train_transformer_lyc_slide.sh both affectnet,vggish,wav2vec None 2 3
-# bash scripts/train_transformer_lyc_slide.sh both affectnet,vggish,wav2vec None 3 3
+# bash scripts/train_transformer_lyc_slide.sh both affectnet,vggish,wav2vec None 250 50 1 2
+# bash scripts/train_transformer_lyc_slide.sh both affectnet,vggish,wav2vec None 250 50 2 2
+# bash scripts/train_transformer_lyc_slide.sh both affectnet,vggish,wav2vec None 250 50 3 2

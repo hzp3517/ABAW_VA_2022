@@ -33,7 +33,7 @@ class SeqLycSlideDataset(BaseDataset):
         ''' MuseWild dataset
         Parameter:
         --------------------------------------
-        set_name: [train, val, test]
+        set_name: [train, val, test, train_eval]
         '''
         super().__init__(opt)
         self.root = '/data2/hzp/ABAW_VA_2022/processed_data/'
@@ -219,12 +219,11 @@ if __name__ == '__main__':
         norm_method = ''
         norm_features = ''
         cls_weighted = False
-        dataset_mode = 'seq_slide'
+        dataset_mode = 'seq_lyc_slide'
         batch_size = 3
         serial_batches = False
         num_threads = 0
         max_dataset_size = float('inf')
-        dataset_mode = 'seq_lyc_slide'
     
     opt = test()
 
