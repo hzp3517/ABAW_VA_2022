@@ -1,7 +1,12 @@
+'''
+refer to the code implementation of: 
+https://github.com/yaohungt/Multimodal-Transformer/blob/a670936824ee722c8494fd98d204977a1d663c7a/src/models.py
+'''
+
 import torch
 import numpy as np
 import os
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 # from .base_model import BaseModel
 # from .networks.regressor import FcRegressor
@@ -11,28 +16,25 @@ import torch.nn.functional as F
 import sys
 sys.path.append('/data2/hzp/ABAW_VA_2022/code')
 from models.base_model import BaseModel
-from models.networks.fc_encoder import FcEncoder
 from models.networks.regressor import FcRegressor
-from models.networks.transformer import TransformerEncoder
+from models.networks.transformer_for_mult import TransformerEncoder_attn
 
 from models.loss import CCCLoss, MSELoss, MultipleLoss
 from utils.bins import get_center_and_bounds
 
-class TransformerLateModel(BaseModel):
+class MultModel(BaseModel):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.add_argument('--max_seq_len', type=int, default=100, help='max sequence length of transformer')
         parser.add_argument('--regress_layers', type=str, default='256,128', help='256,128 for 2 layers with 256, 128 nodes respectively')
         parser.add_argument('--hidden_size', default=256, type=int, help='transformer encoder hidden states')
         parser.add_argument('--num_layers', default=4, type=int, help='number of transformer encoder layers')
-        parser.add_argument('--ffn_dim', default=1024, type=int, help='dimension of FFN layer of transformer encoder')
         parser.add_argument('--nhead', default=4, type=int, help='number of heads of transformer encoder')
         parser.add_argument('--dropout_rate', default=0.3, type=float, help='drop out rate of FC layers')
         parser.add_argument('--target', default='arousal', type=str, choices=['valence', 'arousal', 'both'], help='one of [arousal, valence, both]')
-        parser.add_argument('--use_pe', action='store_true', help='whether to use position encoding')
-        parser.add_argument('--encoder_type', type=str, default='transformer', choices=['transformer', 'fft'], help='whether to use position encoding')
-        parser.add_argument('--affine_type', type=str, default='fc', choices=['fc', 'cnn'], help='affine layer type befor the transformer encoder')
-        parser.add_argument('--affine_ks', type=int, default=3, choices = [1, 3, 5], help='the kernel size of the cnn affine layer')#
+        parser.add_argument('--use_selfattn', default='n', type=str, choices=['y', 'n'],
+                help='whether to add the self-attn transformer after the cross-modal transformer for each modality')
+
         parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
                             choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
                                      'batch_vccc', 'ce'])
@@ -51,11 +53,9 @@ class TransformerLateModel(BaseModel):
         """
         super().__init__(opt, logger)
         self.loss_names = ['reg']
-        self.model_names = ['_A_affine', '_V_affine', '_A_seq', '_V_seq', '_reg']
         self.pretrained_model = []
         self.max_seq_len = opt.max_seq_len
-        self.use_pe = opt.use_pe
-        self.encoder_type = opt.encoder_type
+        self.use_selfattn = opt.use_selfattn
         self.loss_type = opt.loss_type
         if opt.hidden_size == -1:
             opt.hidden_size = min(opt.a_dim // 2, opt.v_dim // 2, 512)
@@ -65,34 +65,29 @@ class TransformerLateModel(BaseModel):
             opt.cls_loss = True
         self.target_name = opt.target
 
+        if self.use_selfattn == 'y':
+            self.model_names = ['_A_affine', '_V_affine', '_VA_seq', '_AV_seq', '_A_seq', '_V_seq', '_reg']
+        else:
+            self.model_names = ['_A_affine', '_V_affine', '_VA_seq', '_AV_seq', '_reg']
+
         if self.cls_loss:
             bin_centers, bin_bounds = get_center_and_bounds(opt.cls_weighted)
             self.bin_centers = dict([(key, np.array(value)) for key, value in bin_centers.items()])
             self.bin_bounds = dict([(key, np.array(value)) for key, value in bin_bounds.items()])
 
         # net affine
-        self.affine_type = opt.affine_type
-        if self.affine_type == 'fc':
-            self.net_A_affine = FcEncoder(opt.a_dim, [opt.hidden_size], dropout=0.1, dropout_input=False)
-            self.net_V_affine = FcEncoder(opt.v_dim, [opt.hidden_size], dropout=0.1, dropout_input=False)
-        else: # 1D CNN
-            if opt.affine_ks == 1:
-                self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
-                self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
-            elif opt.affine_ks == 3:
-                self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=3, stride=1, padding=1)
-                self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=3, stride=1, padding=1)
-            elif opt.affine_ks == 5:
-                self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=5, stride=1, padding=2) # ensure that keep the seq length
-                self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=5, stride=1, padding=2)
+        self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
+        self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
 
-        # net seq
-        if self.encoder_type == 'transformer':
-            self.net_A_seq = TransformerEncoder(opt.hidden_size, opt.num_layers, opt.nhead, \
-                                            dim_feedforward=opt.ffn_dim, affine=False, use_pe=self.use_pe)
-            self.net_V_seq = TransformerEncoder(opt.hidden_size, opt.num_layers, opt.nhead, \
-                                            dim_feedforward=opt.ffn_dim, affine=False, use_pe=self.use_pe)
-        
+        # cross modal transformer
+        self.net_VA_seq = TransformerEncoder_attn(embed_dim=opt.hidden_size, num_heads=opt.nhead, layers=opt.num_layers) # q: A; k,v: V
+        self.net_AV_seq = TransformerEncoder_attn(embed_dim=opt.hidden_size, num_heads=opt.nhead, layers=opt.num_layers) # q: V; k,v: A
+
+        # self-attention transformer
+        if self.use_selfattn == 'y':
+            self.net_V_seq = TransformerEncoder_attn(embed_dim=opt.hidden_size, num_heads=opt.nhead, layers=opt.num_layers)
+            self.net_A_seq = TransformerEncoder_attn(embed_dim=opt.hidden_size, num_heads=opt.nhead, layers=opt.num_layers)
+
         # net regression
         layers = list(map(lambda x: int(x), opt.regress_layers.split(',')))
         output_dim = 22 if self.cls_loss else 1
@@ -110,7 +105,7 @@ class TransformerLateModel(BaseModel):
             self.optimizer = torch.optim.Adam(paremeters, lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer)
 
-
+        
     def set_input(self, input, load_label=True):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
 
@@ -161,19 +156,22 @@ class TransformerLateModel(BaseModel):
 
 
     def forward_step(self, a_input, v_input):
-        if self.affine_type == 'cnn':
-            a_affined_input = self.net_A_affine(a_input.transpose(1, 2))
-            v_affined_input = self.net_V_affine(v_input.transpose(1, 2))
-            a_affined_input = a_affined_input.transpose(1, 2)
-            v_affined_input = v_affined_input.transpose(1, 2)
-        else:
-            a_affined_input = self.net_A_affine(a_input)
-            v_affined_input = self.net_V_affine(v_input)
-        a_out, a_hidden_states = self.net_A_seq(a_affined_input) # hidden_states: layers * (seq_len, bs, hidden_size)
-        v_out, v_hidden_states = self.net_V_seq(v_affined_input) # hidden_states: layers * (seq_len, bs, hidden_size)
-        a_last_hidden = a_hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
-        v_last_hidden = v_hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
-        cat_hidden  = torch.cat([a_last_hidden, v_last_hidden], dim=-1) # (bs, seq_len, hidden_size * 2)
+        # Project the visual/audio features
+        a_affined_input = self.net_A_affine(a_input.transpose(1, 2))
+        v_affined_input = self.net_V_affine(v_input.transpose(1, 2))
+        a_affined_input = a_affined_input.transpose(1, 2)
+        v_affined_input = v_affined_input.transpose(1, 2)
+        # V --> A
+        h_v_with_a = self.net_VA_seq(a_affined_input, v_affined_input, v_affined_input) # (q, k, v)
+        if self.use_selfattn == 'y':
+            h_v_with_a = self.net_A_seq(h_v_with_a)
+        # A --> V
+        h_a_with_v = self.net_AV_seq(v_affined_input, a_affined_input, a_affined_input) # (q, k, v)
+        if self.use_selfattn == 'y':
+            h_a_with_v = self.net_V_seq(h_a_with_v)
+        # concat
+        cat_hidden = torch.cat([h_v_with_a, h_a_with_v], dim=-1) # (bs, seq_len, hidden_size * 2)
+        # regression
         prediction, _ = self.net_reg(cat_hidden)
         logits = None
         if self.cls_loss:
@@ -244,20 +242,15 @@ if __name__ == '__main__':
         
         hidden_size = 256
         num_layers = 4
-        ffn_dim = 1024
         nhead = 4
-        use_pe = True
-        encoder_type = 'transformer'
-        affine_type = 'fc'
         cls_loss = False
         cls_weighted = False
         loss_weights = 1
-
-        affine_ks = 3
+        use_selfattn = 'y'
 
     
     opt = test()
-    net_a = TransformerLateModel(opt)
+    net_a = MultModel(opt)
 
 
     dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
@@ -273,3 +266,4 @@ if __name__ == '__main__':
 
             print(net_a.output)
             print(net_a.output.shape)
+        

@@ -161,7 +161,7 @@ if __name__ == '__main__':
     
     out, hidden_states = net(inp)
     print(out.shape) # torch.Size([2, 256]) (bs, ft_dim)
-    print(len(hidden_states)) # 2
+    print(len(hidden_states)) # 4
     for h in hidden_states:
         print(h.size()) # torch.Size([75, 2, 256]) (seq_len, bs, ft_dim)
     num_params = 0

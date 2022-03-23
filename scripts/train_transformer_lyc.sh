@@ -1,7 +1,7 @@
 set -e
 name=transformer
 batch_size=16
-lr=2e-5
+lr=5e-5
 dropout=0.3
 regress_layers=256,256
 max_seq_len=250
@@ -12,8 +12,8 @@ nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/3-17/wav2vec
-checkpoints_dir=./checkpoints/3-17/wav2vec
+log_dir=./logs/3-24/FAU_situ
+checkpoints_dir=./checkpoints/3-24/FAU_situ
 
 target=$1
 feature=$2
@@ -36,22 +36,13 @@ cmd="python train_lyc_seed.py --dataset_mode=seq --model=transformer --gpu_ids=$
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
 
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT None 1 0
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec None 2 4
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 1 4
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 2 4
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,vggish,wav2vec None 3 4
 
-# bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec_TAPT compare 1 3
-# bash scripts/train_transformer_lyc.sh both affectnet,compare,wav2vec compare 2 4
-
-
-# bash scripts/train_transformer_lyc.sh both wav2vec None 2 3
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT None 1 0
-# bash scripts/train_transformer_lyc.sh both wav2vec_TAPT None 2 1
-
-
-
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT_e10 None 1 4
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT_e10 None 2 4
-# bash scripts/train_transformer_lyc.sh both affectnet,vggish,wav2vec_TAPT_e10 None 3 4
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 1 4
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 2 4
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 3 4
 
 
 

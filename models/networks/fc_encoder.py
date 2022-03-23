@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class FcEncoder(nn.Module):
-    def __init__(self, input_dim, layers, dropout=0.5, use_bn=False, dropout_input=True):
+    def __init__(self, input_dim, layers, dropout=0.3, use_bn=False, dropout_input=True):
         ''' Fully Connect classifier
             fc+relu+bn+dropout， 最后分类128-4层是直接fc的
             Parameters:

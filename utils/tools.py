@@ -57,7 +57,8 @@ def get_dim(feat_name):
         'affectnet': 342,
         'FAU': 35,
         'head_pose':3,
-        'eye_gaze': 120
+        'eye_gaze': 120,
+        'FAU_situ': 512
     }
     if dim_dict.get(feat_name) is not None:
         return dim_dict[feat_name]

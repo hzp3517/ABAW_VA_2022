@@ -14,11 +14,14 @@ from models.base_model import BaseModel
 from models.networks.fc_encoder import FcEncoder
 from models.networks.regressor import FcRegressor
 from models.networks.transformer import TransformerEncoder
+from models.networks.transformer_for_mult import TransformerEncoder_attn
+from models.networks.tfn import TFN
+from models.networks.lmf import LMF
 
 from models.loss import CCCLoss, MSELoss, MultipleLoss
 from utils.bins import get_center_and_bounds
 
-class TransformerLateModel(BaseModel):
+class TransformerEFModel(BaseModel):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.add_argument('--max_seq_len', type=int, default=100, help='max sequence length of transformer')
@@ -33,6 +36,8 @@ class TransformerLateModel(BaseModel):
         parser.add_argument('--encoder_type', type=str, default='transformer', choices=['transformer', 'fft'], help='whether to use position encoding')
         parser.add_argument('--affine_type', type=str, default='fc', choices=['fc', 'cnn'], help='affine layer type befor the transformer encoder')
         parser.add_argument('--affine_ks', type=int, default=3, choices = [1, 3, 5], help='the kernel size of the cnn affine layer')#
+        parser.add_argument('--fusion_type', type=str, default='concat', choices=['concat', 'tfn', 'mult'], help='the type of model fusion')
+        parser.add_argument('--lmf_rank', type=int, default=4, help='the rank of lmf fusion')
         parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
                             choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
                                      'batch_vccc', 'ce'])
@@ -51,12 +56,21 @@ class TransformerLateModel(BaseModel):
         """
         super().__init__(opt, logger)
         self.loss_names = ['reg']
-        self.model_names = ['_A_affine', '_V_affine', '_A_seq', '_V_seq', '_reg']
         self.pretrained_model = []
         self.max_seq_len = opt.max_seq_len
         self.use_pe = opt.use_pe
         self.encoder_type = opt.encoder_type
+        self.fusion_type = opt.fusion_type
+        if self.fusion_type == 'concat':
+            self.model_names = ['_affine', '_seq', '_reg']
+        elif self.fusion_type == 'tfn':
+            self.model_names = ['_fusion', '_affine', '_seq', '_reg']
+        # elif self.fusion_type == 'lmf':
+        #     self.model_names = ['_fusion', '_seq', '_reg']
+        elif self.fusion_type == 'mult':
+            self.model_names = ['_A_affine', '_V_affine', '_VA_trans', '_AV_trans', '_affine', '_seq', '_reg']
         self.loss_type = opt.loss_type
+        self.a_dim, self.v_dim = opt.a_dim, opt.v_dim
         if opt.hidden_size == -1:
             opt.hidden_size = min(opt.a_dim // 2, opt.v_dim // 2, 512)
         self.hidden_size = opt.hidden_size
@@ -70,35 +84,46 @@ class TransformerLateModel(BaseModel):
             self.bin_centers = dict([(key, np.array(value)) for key, value in bin_centers.items()])
             self.bin_bounds = dict([(key, np.array(value)) for key, value in bin_bounds.items()])
 
+        # net fusion
+        if self.fusion_type == 'tfn':
+            self.fusion_hidden = 32
+            tfn_fusion_dim = (self.fusion_hidden + 1) * (self.fusion_hidden + 1)
+            self.net_fusion = TFN((opt.a_dim, opt.v_dim), (self.fusion_hidden, self.fusion_hidden), (0.3, 0.3, 0.3))
+        elif self.fusion_type == 'mult':
+            self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
+            self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
+            self.net_VA_trans = TransformerEncoder_attn(embed_dim=opt.hidden_size, num_heads=opt.nhead, layers=opt.num_layers) # q: A; k,v: V
+            self.net_AV_trans = TransformerEncoder_attn(embed_dim=opt.hidden_size, num_heads=opt.nhead, layers=opt.num_layers) # q: V; k,v: A
+
         # net affine
         self.affine_type = opt.affine_type
+        if self.fusion_type == 'concat':
+            self.affine_in_dim = opt.a_dim + opt.v_dim
+        elif self.fusion_type == 'tfn':
+            self.affine_in_dim = tfn_fusion_dim
+        elif self.fusion_type == 'mult':
+            self.affine_in_dim = opt.hidden_size * 2
         if self.affine_type == 'fc':
-            self.net_A_affine = FcEncoder(opt.a_dim, [opt.hidden_size], dropout=0.1, dropout_input=False)
-            self.net_V_affine = FcEncoder(opt.v_dim, [opt.hidden_size], dropout=0.1, dropout_input=False)
-        else: # 1D CNN
+            self.net_affine = FcEncoder(self.affine_in_dim, [opt.hidden_size], dropout=0.3, dropout_input=False) # already include the ReLU
+        elif self.affine_type == 'cnn': # ensure that keep the seq length
             if opt.affine_ks == 1:
-                self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
-                self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
+                self.net_affine = nn.Conv1d(self.affine_in_dim, opt.hidden_size, kernel_size=1, padding=0, bias=False)
             elif opt.affine_ks == 3:
-                self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=3, stride=1, padding=1)
-                self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=3, stride=1, padding=1)
+                self.net_affine = nn.Conv1d(self.affine_in_dim, opt.hidden_size, kernel_size=3, stride=1, padding=1)
             elif opt.affine_ks == 5:
-                self.net_A_affine = nn.Conv1d(opt.a_dim, opt.hidden_size, kernel_size=5, stride=1, padding=2) # ensure that keep the seq length
-                self.net_V_affine = nn.Conv1d(opt.v_dim, opt.hidden_size, kernel_size=5, stride=1, padding=2)
-
+                self.net_affine = nn.Conv1d(self.affine_in_dim, opt.hidden_size, kernel_size=5, stride=1, padding=2)
+        
         # net seq
         if self.encoder_type == 'transformer':
-            self.net_A_seq = TransformerEncoder(opt.hidden_size, opt.num_layers, opt.nhead, \
+            self.net_seq = TransformerEncoder(opt.hidden_size, opt.num_layers, opt.nhead, \
                                             dim_feedforward=opt.ffn_dim, affine=False, use_pe=self.use_pe)
-            self.net_V_seq = TransformerEncoder(opt.hidden_size, opt.num_layers, opt.nhead, \
-                                            dim_feedforward=opt.ffn_dim, affine=False, use_pe=self.use_pe)
-        
+
         # net regression
-        layers = list(map(lambda x: int(x), opt.regress_layers.split(',')))
-        output_dim = 22 if self.cls_loss else 1
+        self.output_dim = 22 if self.cls_loss else 1
         if self.target_name == 'both':
-            output_dim *= 2
-        self.net_reg = FcRegressor(opt.hidden_size * 2, layers, output_dim, dropout=opt.dropout_rate)
+            self.output_dim *= 2
+        layers = list(map(lambda x: int(x), opt.regress_layers.split(',')))
+        self.net_reg = FcRegressor(opt.hidden_size, layers, self.output_dim, dropout=opt.dropout_rate)
 
         # settings
         if self.isTrain:
@@ -161,20 +186,35 @@ class TransformerLateModel(BaseModel):
 
 
     def forward_step(self, a_input, v_input):
-        if self.affine_type == 'cnn':
-            a_affined_input = self.net_A_affine(a_input.transpose(1, 2))
-            v_affined_input = self.net_V_affine(v_input.transpose(1, 2))
-            a_affined_input = a_affined_input.transpose(1, 2)
-            v_affined_input = v_affined_input.transpose(1, 2)
-        else:
-            a_affined_input = self.net_A_affine(a_input)
-            v_affined_input = self.net_V_affine(v_input)
-        a_out, a_hidden_states = self.net_A_seq(a_affined_input) # hidden_states: layers * (seq_len, bs, hidden_size)
-        v_out, v_hidden_states = self.net_V_seq(v_affined_input) # hidden_states: layers * (seq_len, bs, hidden_size)
-        a_last_hidden = a_hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
-        v_last_hidden = v_hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
-        cat_hidden  = torch.cat([a_last_hidden, v_last_hidden], dim=-1) # (bs, seq_len, hidden_size * 2)
-        prediction, _ = self.net_reg(cat_hidden)
+        # fusion
+        if self.fusion_type == 'tfn':
+            batch_size = a_input.size(0)
+            a_input = a_input.reshape(-1, self.a_dim) # (bs * seq_len, ft_dim)
+            v_input = v_input.reshape(-1, self.v_dim) # (bs * seq_len, ft_dim)
+            fusion_hidden = self.net_fusion(a_input, v_input) # (bs*seq_len, (hidden_size+1)*(hidden_size+1))
+            fusion_hidden = fusion_hidden.reshape(batch_size, -1, self.affine_in_dim) # (bs, seq_len, (hidden_size+1)*(hidden_size+1))
+        elif self.fusion_type == 'mult':
+            a_affined_input = self.net_A_affine(a_input.transpose(1, 2)) # (bs, ft_dim, seq_len)
+            v_affined_input = self.net_V_affine(v_input.transpose(1, 2)) # (bs, ft_dim, seq_len)
+            a_affined_input = a_affined_input.permute(2, 0, 1) # (seq_len, bs, ft_dim)
+            v_affined_input = v_affined_input.permute(2, 0, 1) # (seq_len, bs, ft_dim)
+            # V --> A
+            h_v_with_a = self.net_VA_trans(a_affined_input, v_affined_input, v_affined_input) # (q, k, v) # (seq_len, bs, embd_dim)
+            h_v_with_a = h_v_with_a.transpose(0, 1) # (bs, seq_len, hidden_size)
+            # A --> V
+            h_a_with_v = self.net_AV_trans(v_affined_input, a_affined_input, a_affined_input) # (q, k, v)
+            h_a_with_v = h_a_with_v.transpose(0, 1)
+            # concat
+            fusion_hidden = torch.cat([h_a_with_v, h_v_with_a], dim=-1) # (bs, seq_len, hidden_size * 2)
+        elif self.fusion_type == 'concat':
+            fusion_hidden = torch.cat([v_input, a_input], dim=-1) # (bs, seq_len, v_dim + a_dim)
+
+        # affine and predict
+        affined_ft = self.net_affine(fusion_hidden) # (bs, seq_len, hidden_size)
+        out, hidden_states = self.net_seq(affined_ft) # hidden_states: layers * (seq_len, bs, hidden_size)
+        last_hidden = hidden_states[-1].transpose(0, 1) # (bs, seq_len, hidden_size)
+        prediction, _ = self.net_reg(last_hidden) # (bs, seq_len, out_dim)
+        
         logits = None
         if self.cls_loss:
             logits = prediction.reshape(prediction.shape[:-1] + (22, 2)).transpose(1, 2) #[B, L, 44] -> [B, L, 22, 2] -> [B, 22, L, 2]
@@ -254,10 +294,13 @@ if __name__ == '__main__':
         loss_weights = 1
 
         affine_ks = 3
+        lmf_rank = 4
+
+        fusion_type = 'mult'
 
     
     opt = test()
-    net_a = TransformerLateModel(opt)
+    net_a = TransformerEFModel(opt)
 
 
     dataset, val_dataset = create_dataset_with_args(opt, set_name=['train', 'val'])  # create a dataset given opt.dataset_mode and other options
