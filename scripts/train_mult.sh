@@ -11,8 +11,8 @@ nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/3-22/mult
-checkpoints_dir=./checkpoints/3-22/mult
+log_dir=./logs/3-24/mult-late
+checkpoints_dir=./checkpoints/3-24/mult-late
 
 target=$1
 v_features=$2
@@ -37,22 +37,13 @@ cmd="python train_lyc_seed.py --dataset_mode=seq_late --model=mult --gpu_ids=$gp
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
 
-# bash scripts/train_mult.sh both affectnet vggish,wav2vec None n 1 0
-# bash scripts/train_mult.sh both affectnet vggish,wav2vec None n 2 0
-# bash scripts/train_mult.sh both affectnet vggish,wav2vec None n 3 0
+# bash scripts/train_mult.sh both affectnet vggish,wav2vec None y 1 4
+# bash scripts/train_mult.sh both affectnet vggish,wav2vec None y 2 4
+# bash scripts/train_mult.sh both affectnet vggish,wav2vec None y 3 4
 
-# bash scripts/train_mult.sh both affectnet vggish,wav2vec None y 1 0
-# bash scripts/train_mult.sh both affectnet vggish,wav2vec None y 2 0
-# bash scripts/train_mult.sh both affectnet vggish,wav2vec None y 3 0
-
-
-# bash scripts/train_mult.sh both affectnet compare,wav2vec compare n 1 1
-# bash scripts/train_mult.sh both affectnet compare,wav2vec compare n 2 1
-# bash scripts/train_mult.sh both affectnet compare,wav2vec compare n 3 1
-
-# bash scripts/train_mult.sh both affectnet compare,wav2vec compare y 1 1
-# bash scripts/train_mult.sh both affectnet compare,wav2vec compare y 2 1
-# bash scripts/train_mult.sh both affectnet compare,wav2vec compare y 3 1
+# bash scripts/train_mult.sh both affectnet compare,wav2vec compare y 1 5
+# bash scripts/train_mult.sh both affectnet compare,wav2vec compare y 2 5
+# bash scripts/train_mult.sh both affectnet compare,wav2vec compare y 3 5
 
 
 

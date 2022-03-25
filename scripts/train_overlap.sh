@@ -38,13 +38,13 @@ cmd="python train_lyc_seed.py --dataset_mode=seq --model=transformer_overlap --g
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
 
-# bash scripts/train_overlap.sh both affectnet,vggish,wav2vec None 30 1 3
-# bash scripts/train_overlap.sh both affectnet,vggish,wav2vec None 30 2 3
-# bash scripts/train_overlap.sh both affectnet,vggish,wav2vec None 30 3 3
+# bash scripts/train_overlap.sh both affectnet,vggish,wav2vec None 150 1 0
+# bash scripts/train_overlap.sh both affectnet,vggish,wav2vec None 150 2 0
+# bash scripts/train_overlap.sh both affectnet,vggish,wav2vec None 150 3 0
 
-# bash scripts/train_overlap.sh both affectnet,compare,wav2vec compare 30 1 3
-# bash scripts/train_overlap.sh both affectnet,compare,wav2vec compare 30 2 3
-# bash scripts/train_overlap.sh both affectnet,compare,wav2vec compare 30 3 3
+# bash scripts/train_overlap.sh both affectnet,compare,wav2vec compare 200 1 1
+# bash scripts/train_overlap.sh both affectnet,compare,wav2vec compare 200 2 1
+# bash scripts/train_overlap.sh both affectnet,compare,wav2vec compare 200 3 1
 
 
 
