@@ -1,21 +1,19 @@
 set -e
-name=transformer_lstm
+name=ori
 batch_size=16
 lr=2e-5
 dropout=0.3
 regress_layers=256,256
 max_seq_len=250
-hidden_size=256
+hidden_size=512
 num_layers=4
 ffn_dim=1024
 nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/debug
-checkpoints_dir=./checkpoints/debug
-
-pth_path="/data2/hzp/ABAW_VA_2022/code/checkpoints/3-16/transformer_both_affectnet-vggish-wav2vec_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc/13_net_seq.pth"
+log_dir=./logs/resplit/telstm
+checkpoints_dir=./checkpoints/resplit/telstm
 
 target=$1
 feature=$2
@@ -33,12 +31,20 @@ cmd="python train_lyc_seed.py --dataset_mode=seq --model=transformer_lstm --gpu_
 --batch_size=$batch_size --lr=$lr --dropout_rate=$dropout --run_idx=$run_idx --verbose
 --niter=10 --niter_decay=20
 --num_threads=0 --norm_features=$norm_features --norm_method=trn
---transformer_pretrained --pth_path=$pth_path --residual=$residual
+--residual=$residual
 --name=$name --encoder_type=transformer
 --suffix={target}_{feature_set}_res-{residual}_bs{batch_size}_lr{lr}_dp{dropout_rate}_seq{max_seq_len}_reg-{regress_layers}_hidden{hidden_size}_layers{num_layers}_ffn{ffn_dim}_nhead{nhead}_{loss_type}_run{run_idx}"
 
 echo "-------------------------------------------------------------------------------------"
 echo $cmd | sh
+
+
+# bash scripts/train_transformer_lstm.sh both affectnet,FAU_situ,wav2vec None n 1 5
+# bash scripts/train_transformer_lstm.sh both affectnet,FAU_situ,wav2vec None n 2 7
+
+
+
+
 
 # log_dir=./logs/3-16/transformer_lstm_a_6406
 # checkpoints_dir=./checkpoints/3-16/transformer_lstm_a_6406

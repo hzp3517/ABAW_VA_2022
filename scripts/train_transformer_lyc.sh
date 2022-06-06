@@ -1,19 +1,19 @@
 set -e
-name=transformer
+name=ori
 batch_size=16
-lr=5e-5
+lr=2e-5
 dropout=0.3
 regress_layers=256,256
 max_seq_len=250
-hidden_size=256
+hidden_size=512
 num_layers=4
 ffn_dim=1024
 nhead=4
 
 loss_weights=1
 loss_type=batch_ccc
-log_dir=./logs/3-24/FAU_situ
-checkpoints_dir=./checkpoints/3-24/FAU_situ
+log_dir=./logs/resplit/transformer
+checkpoints_dir=./checkpoints/resplit/transformer
 
 target=$1
 feature=$2
@@ -43,6 +43,9 @@ echo $cmd | sh
 # bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 1 4
 # bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 2 4
 # bash scripts/train_transformer_lyc.sh both affectnet,FAU,compare,wav2vec compare 3 4
+
+
+# bash scripts/train_transformer_lyc.sh both affectnet,FAU_situ,wav2vec None 1 4
 
 
 

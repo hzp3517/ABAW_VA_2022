@@ -1,26 +1,36 @@
 set -e
 name='transformer'
-gpu_ids=7
+gpu_ids=3
 # test_checkpoints="
-# 3-16/transformer_both_affectnet-vggish-wav2vec_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc/13;
-# 3-16/transformer_lstm_a_6406/transformer_lstm_both_affectnet-vggish-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run2/3;
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-vggish-wav2vec_res-y_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run3/7;
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-vggish-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run3/7
+# resplit/transformer/transformer_both_affectnet-FAU_situ-wav2vec_cv1_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/5;
+# resplit/transformer/transformer_both_affectnet-FAU_situ-wav2vec_cv2_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/20;
+# resplit/transformer/transformer_both_affectnet-FAU_situ-wav2vec_cv3_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/10;
+# resplit/transformer/transformer_both_affectnet-FAU_situ-wav2vec_cv4_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/12;
+# resplit/transformer/transformer_both_affectnet-FAU_situ-wav2vec_cv5_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/11
 # "
+
 # test_checkpoints="
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-vggish-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run3/7;
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-vggish-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run5/11;
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/18;
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run4/20
+# resplit/fclstm-xl/fclstm-xl_both_affectnet-FAU_situ-wav2vec_cv1_bs16_lr3e-05_dp0.3_seq100_reg-512-256_hidden512_batch_ccc_run2/11;
+# resplit/fclstm-xl/fclstm-xl_both_affectnet-FAU_situ-wav2vec_cv2_bs16_lr3e-05_dp0.3_seq100_reg-512-256_hidden512_batch_ccc_run2/24;
+# resplit/fclstm-xl/fclstm-xl_both_affectnet-FAU_situ-wav2vec_cv3_bs16_lr3e-05_dp0.3_seq100_reg-512-256_hidden512_batch_ccc_run2/11;
+# resplit/fclstm-xl/fclstm-xl_both_affectnet-FAU_situ-wav2vec_cv4_bs16_lr3e-05_dp0.3_seq100_reg-512-256_hidden512_batch_ccc_run2/17;
+# resplit/fclstm-xl/fclstm-xl_both_affectnet-FAU_situ-wav2vec_cv5_bs16_lr3e-05_dp0.3_seq100_reg-512-256_hidden512_batch_ccc_run2/11;
 # "
+
+# test_checkpoints="
+# resplit/telstm/transformer_lstm_both_affectnet-FAU_situ-wav2vec_cv1_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/25;
+# resplit/telstm/transformer_lstm_both_affectnet-FAU_situ-wav2vec_cv2_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/26;
+# resplit/telstm/transformer_lstm_both_affectnet-FAU_situ-wav2vec_cv3_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/14;
+# resplit/telstm/transformer_lstm_both_affectnet-FAU_situ-wav2vec_cv4_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/17;
+# resplit/telstm/transformer_lstm_both_affectnet-FAU_situ-wav2vec_cv5_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/13
+# "
+
 test_checkpoints="
-3-16/transformer_lstm/transformer_lstm_both_affectnet-vggish-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run3/7;
-3-16/transformer_lstm/transformer_lstm_both_affectnet-vggish-wav2vec_res-y_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run3/7;
-3-16/transformer_lstm/transformer_lstm_both_affectnet-wav2vec_res-y_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/18;
-3-16/transformer_lstm/transformer_lstm_both_affectnet-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/18;
-3-16/transformer_lstm/transformer_lstm_both_affectnet-vggish-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run5/11;
-3-16/transformer_lstm/transformer_lstm_both_affectnet-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run4/20
+resplit/transformer/ori_both_affectnet-FAU_situ-wav2vec_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run2/14;
+resplit/fclstm-xl/ori_both_affectnet-FAU_situ-wav2vec_bs16_lr3e-05_dp0.3_seq100_reg-512-256_hidden512_batch_ccc_run2/13;
+resplit/telstm/ori_both_affectnet-FAU_situ-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden512_layers4_ffn1024_nhead4_batch_ccc_run1/10
 "
+
 
 test_target='arousal'
 

@@ -8,11 +8,13 @@ import torch.nn.functional as F
 # from .networks.fc_encoder import FcEncoder
 
 import sys
-sys.path.append('/data8/hzp/ABAW_VA_2022/code')#
+sys.path.append('../../code')#
 from models.base_model import BaseModel#
 from models.networks.regressor import FcRegressor#
 from models.networks.lstm_encoder import LSTMEncoder, BiLSTMEncoder#
 from models.networks.fc_encoder import FcEncoder#
+
+from models.loss import CCCLoss, MSELoss, MultipleLoss
 
 class FcLstmXLModel(BaseModel):
     @staticmethod
@@ -21,9 +23,16 @@ class FcLstmXLModel(BaseModel):
         parser.add_argument('--regress_layers', type=str, default='256,128', help='256,128 for 2 layers with 256, 128 nodes respectively')
         parser.add_argument('--hidden_size', default=256, type=int, help='lstm hidden layer')
         parser.add_argument('--dropout_rate', default=0.3, type=float, help='drop out rate of FC layers')
-        parser.add_argument('--target', default='arousal', type=str, help='one of [arousal, valence]')
+        parser.add_argument('--target', default='arousal', type=str, choices=['arousal', 'valence', 'both'])
         parser.add_argument('--bidirection', default=False, action='store_true', help='whether to use bidirectional lstm')
-        parser.add_argument('--loss_type', type=str, default='mse', choices=['mse', 'l1', 'ccc'], help='use MSEloss or L1loss or CCCloss')
+
+        parser.add_argument('--loss_type', type=str, default='mse', nargs='+',
+                            choices=['mse', 'ccc', 'batch_ccc', 'amse', 'vmse', 'accc', 'vccc', 'batch_accc',
+                                     'batch_vccc', 'ce'])
+        parser.add_argument('--loss_weights', type=float, default=1, nargs='+')
+        parser.add_argument('--cls_loss', default=False, action='store_true', help='whether to cls and average as loss')
+        parser.add_argument('--cls_weighted', default=False, action='store_true', help='whether to use weighted cls')
+        parser.add_argument('--smooth', default=False, action='store_true', help='whether to use_smooth')
         # parser.add_argument('--normalize', action='store_true', default=False, help='whether to normalize step features')
         return parser
 
@@ -50,17 +59,23 @@ class FcLstmXLModel(BaseModel):
             self.net_seq = LSTMEncoder(opt.hidden_size, opt.hidden_size)
             self.hidden_mul = 1
 
+        self.target_name = opt.target
+        self.loss_type = opt.loss_type
+        self.cls_loss = opt.cls_loss
+
         # net regression
         layers = list(map(lambda x: int(x), opt.regress_layers.split(',')))
         self.hidden_size = opt.hidden_size
-        self.net_reg = FcRegressor(opt.hidden_size * self.hidden_mul, layers, 1, dropout=opt.dropout_rate)
-        # settings 
-        self.target_name = opt.target
+
+        output_dim = 20 if self.cls_loss else 1
+        if self.target_name == 'both':
+            output_dim *= 2
+
+        self.net_reg = FcRegressor(opt.hidden_size * self.hidden_mul, layers, output_dim, dropout=opt.dropout_rate)
+
+        # settings
         if self.isTrain:
-            if opt.loss_type == 'mse':
-                self.criterion_reg = torch.nn.MSELoss(reduction='sum')
-            else:
-                self.criterion_reg = torch.nn.L1Loss(reduction='sum')
+            self.criterion_reg = MultipleLoss(reduction='mean', loss_names=opt.loss_type, weights=opt.loss_weights)
             
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             paremeters = [{'params': getattr(self, 'net'+net).parameters()} for net in self.model_names]
@@ -79,7 +94,10 @@ class FcLstmXLModel(BaseModel):
         self.mask = input['mask'].to(self.device)
         self.length = input['length']
         if load_label:
-            self.target = input[self.target_name].to(self.device)
+            if self.target_name == 'both':
+                self.target = torch.stack([input['valence'], input['arousal']], dim=2).to(self.device)
+            else:
+                self.target = input[self.target_name].to(self.device)
 
     def run(self):
         """After feed a batch of samples, Run the model."""
@@ -96,6 +114,10 @@ class FcLstmXLModel(BaseModel):
             prediction, (previous_h, previous_c) = self.forward_step(feature_step, (previous_h, previous_c))
             previous_h = previous_h.detach()
             previous_c = previous_c.detach()
+            if self.hidden_mul == 2:
+                previous_h[1].fill_(0.0)
+                previous_c[1].fill_(0.0)
+            
             self.output.append(prediction.squeeze(dim=-1))
             # backward
             if self.isTrain:
@@ -110,14 +132,31 @@ class FcLstmXLModel(BaseModel):
         fusion = self.net_fc(input)
         hidden, (h, c) = self.net_seq(fusion, states)
         prediction, _ = self.net_reg(hidden)
+        if self.cls_loss:
+            if self.target_name == 'both':
+                prediction = prediction.reshape(prediction.shape[:-1] + (20, 2))
+            else:
+                prediction = prediction.unsqueeze(-1)
+            prediction = F.softmax(prediction, dim=-2)
+            weights = torch.FloatTensor([(-0.95 + i/10.0) for i in range(20)]).reshape(1, 1, -1, 1).cuda()
+            prediction = torch.sum(prediction * weights, dim=-2)
         return prediction, (h, c)
    
     def backward_step(self, pred, target, mask):
         """Calculate the loss for back propagation"""
-        pred = pred.squeeze() * mask
-        target = target * mask
+        #pred: [B, L, 1] or [B, L, 2]
+        #target: [B, L] or [B, L, 2]
+        #mask: [B, L]
+
+        mask = mask.unsqueeze(-1) # -> [B, L, 1]
+        if self.target_name != 'both':
+            target = target.unsqueeze(-1)  # -> [B, L, 1]
+        else:
+            mask = mask.expand(mask.shape[0], mask.shape[1], 2) # -> [B, L, 2]
+
         batch_size = target.size(0)
-        self.loss_MSE = self.criterion_reg(pred, target) / batch_size
+        self.loss_MSE = self.criterion_reg(pred, target, mask)
+        #self.loss_MSE = self.loss_MSE / batch_size
         self.loss_MSE.backward(retain_graph=False)    
         for model in self.model_names:
             torch.nn.utils.clip_grad_norm_(getattr(self, 'net'+model).parameters(), 5)

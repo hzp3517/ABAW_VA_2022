@@ -1,14 +1,12 @@
 set -e
 name='transformer'
-gpu_ids=4
-# test_checkpoints="
-# 3-16/transformer_both_affectnet-compare-wav2vec_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc/12;
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-compare-wav2vec_res-y_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run2/13;
-# 3-16/transformer_lstm/transformer_lstm_both_affectnet-compare-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run2/13;
-# 3-16/transformer_lstm_v_5935/transformer_lstm_both_affectnet-compare-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run3/2
-# "
+gpu_ids=7
 test_checkpoints="
-3-16/transformer_lstm_v_5935/transformer_lstm_both_affectnet-compare-wav2vec_res-n_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run3/2
+resplit/transformer/transformer_both_affectnet-egemaps-wav2vec_cv1_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/10;
+resplit/transformer/transformer_both_affectnet-egemaps-wav2vec_cv2_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/13;
+resplit/transformer/transformer_both_affectnet-egemaps-wav2vec_cv3_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/1;
+resplit/transformer/transformer_both_affectnet-egemaps-wav2vec_cv4_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/5;
+resplit/transformer/transformer_both_affectnet-egemaps-wav2vec_cv5_bs16_lr2e-05_dp0.3_seq250_reg-256-256_hidden256_layers4_ffn1024_nhead4_batch_ccc_run1/5
 "
 test_target='valence'
 

@@ -26,3 +26,4 @@ wav2vec_ckpt
 val_results*
 test_results*
 pred_csv*
+resplit_tst_jsons*
